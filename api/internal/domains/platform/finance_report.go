@@ -329,6 +329,8 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		"tauthub_revenue_gross":        profit.gross,
 		"tauthub_commission_gross":     profit.commission,
 		"tauthub_internal_gross":       profit.internal,
+		"tauthub_nonpublication":       profit.nonPublication,
+		"tauthub_gateway_fee":          profit.gatewayFee,
 		"tauthub_withdrawn":            profit.withdrawn,
 		"tauthub_available_to_withdraw": profit.available,
 		// Jumlah fisik yang wajib ada di rekening escrow.

@@ -209,53 +209,89 @@ func (d *Deps) finPartnerUnpaidAsOf(ctx context.Context, asOf time.Time, excl fi
 	return int64(math.Round(row.numOr("total"))), nil
 }
 
-// finProfit: pendapatan Tauthub pada satu rentang.
+// finProfit: pendapatan Tauthub pada satu rentang, dihitung dari uang yang
+// benar-benar diterima, bukan dari harga list.
 type finProfit struct {
-	commission     int64 // komisi 25% dari harga publikasi terbit
+	commission     int64 // bagian Tauthub dari order mitra luar: kredit dibayar klien - bagian mitra
 	internal       int64 // porsi mitra internal (akun milik Tauthub), ikut jadi pendapatan
-	gross          int64 // commission + internal
+	nonPublication int64 // pemakaian kredit non-publikasi: AI dan potongan saldo manual
+	gatewayFee     int64 // fee gateway yang dipotong dari topup
+	gross          int64 // commission + internal + nonPublication - gatewayFee
 	internalPaid   int64 // bagian internal yang sudah dicairkan (settlement paid)
 	adminWithdrawn int64 // penarikan profit yang tercatat di admin_profit_withdrawals
 	withdrawn      int64 // adminWithdrawn + internalPaid
 	available      int64 // gross - withdrawn, tidak negatif
 }
 
-// finProfitInRange: pendapatan Tauthub dari publikasi `published_at` dalam
-// [from, toExcl). Brand yang dikecualikan tidak dihitung. Rumusnya:
-//   komisi 25% dari harga semua publikasi terbit
-//   + porsi mitra untuk mitra internal (Tauthub memegang 100% order itu)
-//   - penarikan profit tercatat - porsi internal yang sudah dicairkan
+// finProfitInRange: pendapatan Tauthub pada [from, toExcl). Rumusnya:
+//   kredit yang dibayar klien untuk publikasi terbit (published_at dalam rentang)
+//   - penghasilan mitra luar untuk publikasi itu
+//   + pemakaian kredit non-publikasi (capture tanpa publikasi, potongan manual)
+//   - fee gateway dari topup production
+//   - penarikan profit tercatat - porsi mitra internal yang sudah dicairkan
+// Penghasilan mitra internal (akun milik Tauthub) tidak dikurangkan: itu uang
+// Tauthub sendiri. Brand yang dikecualikan tidak dihitung.
+//
+// Identitas yang dijaga: topup kotor = saldo klien + kredit publikasi + pemakaian
+// non-publikasi - penyesuaian, sehingga wajib-ada mendekati saldo gateway.
 func (d *Deps) finProfitInRange(ctx context.Context, from, toExcl time.Time, excl finFilterCtx) (finProfit, error) {
 	var pr finProfit
 	row, err := d.queryRow(ctx, `
-		SELECT COALESCE(ROUND(SUM(client_price) * 0.25), 0)::bigint AS commission
-		FROM publications
-		WHERE status = 'published'
-		  AND published_at IS NOT NULL
-		  AND published_at >= $1 AND published_at < $2
-		  AND brand_id::text != ALL($3::text[])`, from, toExcl, excl.brandArr())
+		WITH pubs AS (
+		  SELECT p.id FROM publications p
+		  WHERE p.status = 'published' AND p.published_at IS NOT NULL
+		    AND p.published_at >= $1 AND p.published_at < $2
+		    AND p.brand_id::text != ALL($3::text[])
+		)
+		SELECT
+		  COALESCE((SELECT SUM(ABS(l.amount_tc)) FROM credit_ledger_entries l
+		             WHERE l.ref_type = 'capture' AND l.ref_id IN (SELECT id FROM pubs)), 0) AS captured,
+		  COALESCE((SELECT SUM(e.amount) FROM partner_earnings e
+		             WHERE e.kind = 'publication' AND e.status <> 'voided'
+		               AND e.publication_id IN (SELECT id FROM pubs)
+		               AND e.partner_id::text != ALL($4::text[])), 0) AS outside,
+		  COALESCE((SELECT SUM(e.amount) FROM partner_earnings e
+		             WHERE e.kind = 'publication' AND e.status <> 'voided'
+		               AND e.publication_id IN (SELECT id FROM pubs)
+		               AND e.partner_id::text = ANY($4::text[])), 0) AS internal,
+		  COALESCE((SELECT SUM(e.amount) FROM partner_earnings e
+		             JOIN settlements s ON s.id = e.settlement_id
+		             WHERE e.kind = 'publication' AND e.status <> 'voided'
+		               AND e.publication_id IN (SELECT id FROM pubs)
+		               AND e.partner_id::text = ANY($4::text[]) AND s.status = 'paid'), 0) AS internal_paid`,
+		from, toExcl, excl.brandArr(), excl.internalArr())
 	if err != nil {
 		return pr, err
 	}
-	pr.commission = int64(math.Round(row.numOr("commission")))
+	captured := int64(math.Round(row.numOr("captured")))
+	outside := int64(math.Round(row.numOr("outside")))
+	pr.internal = int64(math.Round(row.numOr("internal")))
+	pr.internalPaid = int64(math.Round(row.numOr("internal_paid")))
+	pr.commission = captured - outside - pr.internal
 
-	in, err := d.queryRow(ctx, `
-		SELECT COALESCE(SUM(e.amount), 0) AS gross,
-		       COALESCE(SUM(e.amount) FILTER (WHERE s.status = 'paid'), 0) AS paid
-		FROM partner_earnings e
-		JOIN publications p ON p.id = e.publication_id
-		LEFT JOIN settlements s ON s.id = e.settlement_id
-		WHERE e.kind = 'publication' AND e.status <> 'voided'
-		  AND e.partner_id::text = ANY($3::text[])
-		  AND p.status = 'published' AND p.published_at IS NOT NULL
-		  AND p.published_at >= $1 AND p.published_at < $2
-		  AND p.brand_id::text != ALL($4::text[])`, from, toExcl, excl.internalArr(), excl.brandArr())
+	np, err := d.queryRow(ctx, `
+		SELECT COALESCE(-SUM(l.amount_tc) FILTER (WHERE l.ref_type = 'capture' AND l.amount_tc < 0 AND p.id IS NULL), 0)
+		     + COALESCE(-SUM(l.amount_tc) FILTER (WHERE l.ref_type = 'adjustment'), 0) AS v
+		FROM credit_ledger_entries l
+		LEFT JOIN publications p ON p.id = l.ref_id
+		WHERE l.created_at >= $1 AND l.created_at < $2
+		  AND l.brand_id::text != ALL($3::text[])`, from, toExcl, excl.brandArr())
 	if err != nil {
 		return pr, err
 	}
-	pr.internal = int64(math.Round(in.numOr("gross")))
-	pr.internalPaid = int64(math.Round(in.numOr("paid")))
-	pr.gross = pr.commission + pr.internal
+	pr.nonPublication = int64(math.Round(np.numOr("v")))
+
+	fee, err := d.queryRow(ctx, `
+		SELECT COALESCE(SUM(`+financeTopupFeeExpr+`), 0) AS v
+		FROM payment_transactions t
+		WHERE `+financeRealTopupCond+`
+		  AND (t.brand_id IS NULL OR t.brand_id::text != ALL($3::text[]))
+		  AND COALESCE(t.paid_at, t.created_at) >= $1
+		  AND COALESCE(t.paid_at, t.created_at) < $2`, from, toExcl, excl.brandArr())
+	if err != nil {
+		return pr, err
+	}
+	pr.gatewayFee = int64(math.Round(fee.numOr("v")))
 
 	wd, err := d.queryRow(ctx, `
 		SELECT COALESCE(SUM(amount), 0)::bigint AS total
@@ -266,6 +302,8 @@ func (d *Deps) finProfitInRange(ctx context.Context, from, toExcl time.Time, exc
 		return pr, err
 	}
 	pr.adminWithdrawn = int64(math.Round(wd.numOr("total")))
+
+	pr.gross = pr.commission + pr.internal + pr.nonPublication - pr.gatewayFee
 	pr.withdrawn = pr.adminWithdrawn + pr.internalPaid
 	pr.available = pr.gross - pr.withdrawn
 	if pr.available < 0 {

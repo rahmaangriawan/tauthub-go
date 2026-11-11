@@ -63,7 +63,9 @@
 		client_adjusted?: number;              // Saldo Penyesuaian (bukan uang nyata)
 		client_reserved?: number;              // Dana Tertahan (Escrow)
 		tauthub_revenue_gross?: number;        // pendapatan Tauthub kotor (komisi 25% + porsi mitra internal)
-		tauthub_commission_gross?: number;     // komisi 25% dari harga publikasi terbit
+		tauthub_commission_gross?: number;     // bagian Tauthub dari order mitra luar (kredit dibayar - bagian mitra)
+		tauthub_nonpublication?: number;       // pemakaian kredit non-publikasi (AI, potongan manual)
+		tauthub_gateway_fee?: number;          // fee gateway dari topup
 		tauthub_internal_gross?: number;       // porsi mitra internal (akun milik Tauthub)
 		tauthub_withdrawn?: number;            // sudah dicatat tertarik admin
 		tauthub_available_to_withdraw?: number;// Profit Bersih siap ditarik
@@ -110,9 +112,15 @@
 		last_earning_at: string | null;
 	};
 	type ProfitItem = {
-		publication_id: string; client_price: number; commission: number; internal_share?: number;
+		publication_id: string; client_price: number; credit: number;
+		partner_outside: number; internal_share: number; revenue: number;
 		published_at: string | null; published_url: string;
 		brand_name: string; client_name: string; media_name: string; partner_name: string;
+	};
+	type ProfitMonth = { month: string; gmv: number; credit: number; revenue: number; count: number };
+	type ProfitTotals = {
+		commission: number; internal: number; non_publication: number; gateway_fee: number;
+		gross: number; withdrawn: number; available: number;
 	};
 	type Report = {
 		from: string; to: string; summary: Summary; monthly: Monthly[];
@@ -232,7 +240,8 @@
 	let profitError = $state('');
 	let profitEntries = $state<ProfitItem[] | null>(null);
 	let profitTotalCount = $state(0);
-	let profitMonthly = $state<Array<{ month: string; gmv: number; commission: number; count: number }>>([]);
+	let profitMonthly = $state<ProfitMonth[]>([]);
+	let profitTotals = $state<ProfitTotals | null>(null);
 
 	let cashOpen = $state(false);
 
@@ -448,11 +457,12 @@
 			}
 			const body = (await res.json()) as {
 				entries?: ProfitItem[]; total?: number;
-				monthly?: Array<{ month: string; gmv: number; commission: number; count: number }>;
+				monthly?: ProfitMonth[]; totals?: ProfitTotals;
 			};
 			profitEntries = body.entries ?? [];
 			profitTotalCount = body.total ?? 0;
 			profitMonthly = body.monthly ?? [];
+			profitTotals = body.totals ?? null;
 		} catch {
 			profitError = tr('Tidak dapat terhubung ke server API.');
 		} finally {
@@ -742,7 +752,7 @@
 					<div class="flex items-center justify-between gap-2">
 						<div class="flex min-w-0 items-center gap-2.5">
 							<span class="kpiIcon kpiIconPosProfit"><PiggyBank size={15} /></span>
-							<Tooltip content={tr("Komisi 25% dari harga publikasi terbit, ditambah penghasilan mitra internal (akun milik Tauthub sendiri), dikurangi yang sudah ditarik atau dicairkan. Hanya ini yang sah Anda tarik ke rekening operasional.")}>
+							<Tooltip content={tr("Uang yang benar-benar diterima Tauthub: kredit publikasi yang dibayar klien dikurangi bagian mitra, ditambah pemakaian kredit non-publikasi (AI, potongan manual), dikurangi fee gateway, lalu dikurangi yang sudah ditarik atau dicairkan. Hanya ini yang sah Anda tarik ke rekening operasional.")}>
 								<span class="kpiLabel">{tr("Profit Bersih Tauthub")}</span>
 							</Tooltip>
 						</div>
@@ -756,9 +766,10 @@
 					<p class="kpiValue kpiValuePosProfit mt-3">{rp(summary.tauthub_available_to_withdraw ?? 0)}</p>
 					<p class="kpiDesc mt-2">
 						{tr("Kotor")}: {rp(summary.tauthub_revenue_gross ?? 0)} · {tr("sudah ditarik")}: {rp(summary.tauthub_withdrawn ?? 0)}
-						{#if (summary.tauthub_internal_gross ?? 0) > 0}
-							<span class="block">{tr("Komisi")} {rp(summary.tauthub_commission_gross ?? 0)} + {tr("mitra internal")} {rp(summary.tauthub_internal_gross ?? 0)}</span>
-						{/if}
+						<span class="block">
+							{tr("Komisi")} {rp(summary.tauthub_commission_gross ?? 0)} + {tr("mitra internal")} {rp(summary.tauthub_internal_gross ?? 0)}
+							+ {tr("non-publikasi")} {rp(summary.tauthub_nonpublication ?? 0)} − {tr("fee")} {rp(summary.tauthub_gateway_fee ?? 0)}
+						</span>
 					</p>
 					<button type="button" class="kpiDetailLink mt-2" onclick={openProfit}>
 						{tr("Lihat per publikasi")} →
@@ -1363,7 +1374,7 @@
 		{#if profitOpen}
 			<Modal title={tr("Profit Bersih Tauthub — per Publikasi")} maxWidth="workspace" onClose={() => (profitOpen = false)}>
 				<p class="text-sm text-muted-foreground">
-					{tr("Pendapatan Tauthub = komisi 25% dari harga publikasi terbit. Untuk mitra internal (akun milik Tauthub sendiri), porsi mitra 75% ikut dihitung. Top 100 publikasi, diurutkan dari harga tertinggi.")}
+					{tr("Pendapatan Tauthub dihitung dari uang yang benar-benar diterima: kredit yang dibayar klien untuk publikasi, dikurangi penghasilan mitra luar. Penghasilan mitra internal (akun milik Tauthub sendiri) tidak dikurangkan karena itu uang Tauthub. Rincian di bawah: 100 publikasi terbaru.")}
 				</p>
 				{#if profitLoading && profitEntries === null}
 					<p class="mt-4 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
@@ -1374,14 +1385,27 @@
 				{:else if profitEntries}
 					<p class="mt-3 text-xs text-muted-foreground">
 						{tr("Total publikasi terbit")}: <span class="font-semibold">{fmtNum(profitTotalCount)}</span>
-					</p>
+						</p>
+					{#if profitTotals}
+						{@const pt = profitTotals}
+						<div class="mt-3 max-w-xl space-y-1.5 text-sm">
+							<div class="flex justify-between"><span>{tr("Dari order mitra luar (kredit dibayar − bagian mitra)")}</span><span class="tabular-nums">{rp(pt.commission)}</span></div>
+							<div class="flex justify-between"><span>{tr("Dari order mitra internal")}</span><span class="tabular-nums">{rp(pt.internal)}</span></div>
+							<div class="flex justify-between"><span>{tr("Pemakaian kredit non-publikasi (AI, potongan manual)")}</span><span class="tabular-nums">{rp(pt.non_publication)}</span></div>
+							<div class="flex justify-between"><span>{tr("Fee gateway")}</span><span class="tabular-nums">− {rp(pt.gateway_fee)}</span></div>
+							<div class="flex justify-between border-t pt-1.5 font-semibold"><span>{tr("Pendapatan kotor")}</span><span class="tabular-nums">{rp(pt.gross)}</span></div>
+							<div class="flex justify-between"><span>{tr("Sudah ditarik atau dicairkan")}</span><span class="tabular-nums">− {rp(pt.withdrawn)}</span></div>
+							<div class="flex justify-between border-t pt-1.5 font-semibold" style="color: #059669;"><span>{tr("Profit Bersih tersedia")}</span><span class="tabular-nums">{rp(pt.available)}</span></div>
+						</div>
+					{/if}
 					{#if profitMonthly.length > 0}
 						<div class="mt-3 overflow-x-auto">
 							<table class="w-full text-xs" style="min-width: 520px;">
 								<thead>
 									<tr class="text-left text-muted-foreground">
 										<th class="px-2 py-1 font-medium">{tr("Bulan")}</th>
-										<th class="px-2 py-1 text-right font-medium">{tr("GMV")}</th>
+										<th class="px-2 py-1 text-right font-medium">{tr("Harga list")}</th>
+										<th class="px-2 py-1 text-right font-medium">{tr("Dibayar klien")}</th>
 										<th class="px-2 py-1 text-right font-medium">{tr("Pendapatan Tauthub")}</th>
 										<th class="px-2 py-1 text-right font-medium">{tr("Jumlah terbit")}</th>
 									</tr>
@@ -1391,7 +1415,8 @@
 										<tr class="border-t">
 											<td class="px-2 py-1">{m.month}</td>
 											<td class="px-2 py-1 text-right tabular-nums">{rp(m.gmv)}</td>
-											<td class="px-2 py-1 text-right tabular-nums font-semibold" style="color: #059669;">{rp(m.commission)}</td>
+											<td class="px-2 py-1 text-right tabular-nums">{rp(m.credit)}</td>
+											<td class="px-2 py-1 text-right tabular-nums font-semibold" style="color: #059669;">{rp(m.revenue)}</td>
 											<td class="px-2 py-1 text-right tabular-nums">{fmtNum(m.count)}</td>
 										</tr>
 									{/each}
@@ -1399,15 +1424,17 @@
 							</table>
 						</div>
 					{/if}
-					<p class="mt-5 text-xs font-semibold text-muted-foreground">{tr("Top 100 publikasi (per client price):")}</p>
+					<p class="mt-5 text-xs font-semibold text-muted-foreground">{tr("100 publikasi terbaru:")}</p>
 					<div class="mt-2 overflow-x-auto">
-						<table class="w-full text-sm" style="min-width: 760px;">
+						<table class="w-full text-sm" style="min-width: 980px;">
 							<thead>
 								<tr class="text-left text-xs text-muted-foreground">
 									<th class="px-2 py-2 font-medium">{tr("Terbit")}</th>
 									<th class="px-2 py-2 font-medium">{tr("Brand")}</th>
 									<th class="px-2 py-2 font-medium">{tr("Media / Mitra")}</th>
-									<th class="px-2 py-2 text-right font-medium">{tr("Client Price")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Harga list")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Dibayar klien")}</th>
+									<th class="px-2 py-2 text-right font-medium">{tr("Bagian mitra")}</th>
 									<th class="px-2 py-2 text-right font-medium">{tr("Pendapatan Tauthub")}</th>
 									<th class="px-2 py-2 font-medium">{tr("Tautan")}</th>
 								</tr>
@@ -1424,11 +1451,21 @@
 											<p>{row.media_name || '—'}</p>
 											{#if row.partner_name}<p class="text-[11px] text-muted-foreground">{row.partner_name}</p>{/if}
 										</td>
-										<td class="px-2 py-2 text-right tabular-nums">{rp(row.client_price)}</td>
-										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: #059669;">
-											{rp(row.commission)}
-											{#if (row.internal_share ?? 0) > 0}
-												<p class="text-[10px] font-normal text-muted-foreground">25% + {tr("mitra internal")} {rp(row.internal_share ?? 0)}</p>
+										<td class="px-2 py-2 text-right tabular-nums text-muted-foreground">{rp(row.client_price)}</td>
+										<td class="px-2 py-2 text-right tabular-nums">{rp(row.credit)}</td>
+										<td class="px-2 py-2 text-right tabular-nums">
+											{#if row.partner_outside > 0}
+												{rp(row.partner_outside)}
+											{:else if row.internal_share > 0}
+												<span class="text-[11px] text-muted-foreground">{tr("mitra internal")}</span>
+											{:else}
+												—
+											{/if}
+										</td>
+										<td class="px-2 py-2 text-right tabular-nums font-semibold" style="color: {row.revenue < 0 ? 'var(--destructive)' : '#059669'};">
+											{row.revenue < 0 ? '− ' : ''}{rp(Math.abs(row.revenue))}
+											{#if row.internal_share > 0}
+												<p class="text-[10px] font-normal text-muted-foreground">{tr("termasuk porsi mitra")} {rp(row.internal_share)}</p>
 											{/if}
 										</td>
 										<td class="px-2 py-2">
@@ -1535,6 +1572,9 @@
 					{#if rc.orphan_publications.length > 0}
 						<p class="mt-5 text-xs font-semibold text-muted-foreground">
 							{tr("Publikasi terbit tanpa catatan penghasilan mitra")} ({fmtNum(rc.orphan_count)}):
+						</p>
+						<p class="mt-1 text-[11px] text-muted-foreground">
+							{tr("Kredit dari publikasi ini dihitung seluruhnya sebagai pendapatan Tauthub sampai penghasilan mitranya dicatat.")}
 						</p>
 						<div class="mt-2 overflow-x-auto">
 							<table class="w-full text-sm" style="min-width: 520px;">

@@ -251,19 +251,14 @@ func (d *Deps) FinancePartnerUnpaidDetail(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// finInternalShareJoin: porsi mitra internal per publikasi (placeholder @INT@
-// diganti nomor parameter array ID mitra internal).
-const finInternalShareJoin = `LEFT JOIN LATERAL (
-	SELECT SUM(e.amount) AS amount FROM partner_earnings e
-	WHERE e.publication_id = p.id AND e.kind = 'publication' AND e.status <> 'voided'
-	  AND e.partner_id::text = ANY(@INT@::text[])) ie ON true`
-
 // FinanceProfitBreakdown: GET /v1/platform/finance/profit-breakdown
 //
-// Pendapatan Tauthub per publikasi terbit: komisi 25% dari harga, ditambah
-// porsi mitra bila mitranya akun internal (milik Tauthub sendiri). Diurutkan
-// dari harga terbesar, plus ringkasan 12 bulan. Brand yang dikecualikan tidak
-// dihitung, sama seperti kartu Profit Bersih.
+// Pendapatan Tauthub per publikasi terbit, dihitung dari uang yang diterima:
+// kredit yang dibayar klien dikurangi penghasilan mitra luar. Porsi mitra
+// internal (akun milik Tauthub) tidak dikurangkan karena itu uang Tauthub
+// sendiri. Ringkasan di atas rincian memakai fungsi yang sama dengan kartu
+// Profit Bersih, jadi totalnya selalu sama. Brand yang dikecualikan tidak
+// dihitung.
 func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 	_, _, ok := d.adminGuard(w, r, "payments")
 	if !ok {
@@ -287,28 +282,34 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	countArgs := []any{excl.brandArr()}
-	countRange := ""
-	if useRange {
-		countArgs = append(countArgs, rangeFrom, rangeToExcl)
-		countRange = " AND p.published_at >= $2 AND p.published_at < $3"
+	if !useRange {
+		rangeToExcl = time.Now().Add(time.Minute)
 	}
+
+	totals, err := d.finProfitInRange(r.Context(), rangeFrom, rangeToExcl, excl)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+
+	countArgs := []any{excl.brandArr(), rangeFrom, rangeToExcl}
 	countRow, _ := d.queryRow(r.Context(),
 		`SELECT COUNT(*)::int AS n FROM publications p
-		 WHERE p.status = 'published' AND p.brand_id::text != ALL($1::text[])`+countRange, countArgs...)
+		 WHERE p.status = 'published' AND p.published_at IS NOT NULL
+		   AND p.brand_id::text != ALL($1::text[])
+		   AND p.published_at >= $2 AND p.published_at < $3`, countArgs...)
 
-	listArgs := []any{excl.brandArr(), excl.internalArr(), limit, offset}
-	listRange := ""
-	if useRange {
-		listArgs = append(listArgs, rangeFrom, rangeToExcl)
-		listRange = " AND p.published_at >= $5 AND p.published_at < $6"
-	}
 	rows, err := d.queryRows(r.Context(),
 		`SELECT p.id::text              AS publication_id,
 		        p.client_price,
-		        ROUND(p.client_price * 0.25) + COALESCE(ie.amount, 0) AS commission,
-		        COALESCE(ie.amount, 0)   AS internal_share,
+		        COALESCE((SELECT SUM(ABS(l.amount_tc)) FROM credit_ledger_entries l
+		                   WHERE l.ref_id = p.id AND l.ref_type = 'capture'), 0) AS credit,
+		        COALESCE((SELECT SUM(e.amount) FROM partner_earnings e
+		                   WHERE e.publication_id = p.id AND e.kind = 'publication' AND e.status <> 'voided'
+		                     AND e.partner_id::text != ALL($2::text[])), 0) AS partner_outside,
+		        COALESCE((SELECT SUM(e.amount) FROM partner_earnings e
+		                   WHERE e.publication_id = p.id AND e.kind = 'publication' AND e.status <> 'voided'
+		                     AND e.partner_id::text = ANY($2::text[])), 0) AS internal_share,
 		        p.published_at,
 		        p.published_url,
 		        b.name                   AS brand_name,
@@ -319,11 +320,11 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		   JOIN brands b   ON b.id = p.brand_id
 		   LEFT JOIN media m   ON m.id = p.media_id
 		   LEFT JOIN partners pt ON pt.id = m.partner_id
-		   `+strings.ReplaceAll(finInternalShareJoin, "@INT@", "$2")+`
-		  WHERE p.status = 'published'
-		    AND p.brand_id::text != ALL($1::text[])`+listRange+`
-		  ORDER BY p.client_price DESC, p.published_at DESC
-		  LIMIT $3 OFFSET $4`, listArgs...)
+		  WHERE p.status = 'published' AND p.published_at IS NOT NULL
+		    AND p.brand_id::text != ALL($1::text[])
+		    AND p.published_at >= $5 AND p.published_at < $6
+		  ORDER BY p.published_at DESC, p.client_price DESC
+		  LIMIT $3 OFFSET $4`, excl.brandArr(), excl.internalArr(), limit, offset, rangeFrom, rangeToExcl)
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -336,17 +337,21 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		if !publishedAt.IsZero() {
 			publishedStr = isoMilli(publishedAt)
 		}
+		credit := finReportInt(row.numOr("credit"))
+		outside := finReportInt(row.numOr("partner_outside"))
 		entries = append(entries, map[string]any{
-			"publication_id": row.strOr("publication_id", ""),
-			"client_price":   finReportInt(row.numOr("client_price")),
-			"commission":     finReportInt(row.numOr("commission")),
-			"internal_share": finReportInt(row.numOr("internal_share")),
-			"published_at":   publishedStr,
-			"published_url":  row.strOr("published_url", ""),
-			"brand_name":     row.strOr("brand_name", ""),
-			"client_name":    row.strOr("client_name", ""),
-			"media_name":     row.strOr("media_name", ""),
-			"partner_name":   row.strOr("partner_name", ""),
+			"publication_id":  row.strOr("publication_id", ""),
+			"client_price":    finReportInt(row.numOr("client_price")),
+			"credit":          credit,
+			"partner_outside": outside,
+			"internal_share":  finReportInt(row.numOr("internal_share")),
+			"revenue":         credit - outside,
+			"published_at":    publishedStr,
+			"published_url":   row.strOr("published_url", ""),
+			"brand_name":      row.strOr("brand_name", ""),
+			"client_name":     row.strOr("client_name", ""),
+			"media_name":      row.strOr("media_name", ""),
+			"partner_name":    row.strOr("partner_name", ""),
 		})
 	}
 
@@ -357,10 +362,17 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 	monthRows, _ := d.queryRows(r.Context(),
 		`SELECT to_char(p.published_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS month,
 		        COALESCE(SUM(p.client_price), 0) AS gmv,
-		        COALESCE(ROUND(SUM(p.client_price) * 0.25), 0) + COALESCE(SUM(ie.amount), 0) AS commission,
+		        COALESCE(SUM(c.v), 0) AS credit,
+		        COALESCE(SUM(c.v), 0) - COALESCE(SUM(o.v), 0) AS revenue,
 		        COUNT(*) AS count
 		   FROM publications p
-		   `+strings.ReplaceAll(finInternalShareJoin, "@INT@", "$4")+`
+		   LEFT JOIN LATERAL (
+		     SELECT SUM(ABS(l.amount_tc)) AS v FROM credit_ledger_entries l
+		      WHERE l.ref_id = p.id AND l.ref_type = 'capture') c ON true
+		   LEFT JOIN LATERAL (
+		     SELECT SUM(e.amount) AS v FROM partner_earnings e
+		      WHERE e.publication_id = p.id AND e.kind = 'publication' AND e.status <> 'voided'
+		        AND e.partner_id::text != ALL($4::text[])) o ON true
 		  WHERE p.status = 'published' AND p.published_at IS NOT NULL
 		    AND p.published_at >= $1 AND p.published_at < $2
 		    AND p.brand_id::text != ALL($3::text[])
@@ -369,10 +381,11 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 	monthly := make([]map[string]any, 0, len(monthRows))
 	for _, row := range monthRows {
 		monthly = append(monthly, map[string]any{
-			"month":      row.strOr("month", ""),
-			"gmv":        finReportInt(row.numOr("gmv")),
-			"commission": finReportInt(row.numOr("commission")),
-			"count":      row.intOr("count", 0),
+			"month":   row.strOr("month", ""),
+			"gmv":     finReportInt(row.numOr("gmv")),
+			"credit":  finReportInt(row.numOr("credit")),
+			"revenue": finReportInt(row.numOr("revenue")),
+			"count":   row.intOr("count", 0),
 		})
 	}
 
@@ -383,5 +396,14 @@ func (d *Deps) FinanceProfitBreakdown(w http.ResponseWriter, r *http.Request) {
 		"limit":   limit,
 		"offset":  offset,
 		"monthly": monthly,
+		"totals": map[string]any{
+			"commission":      totals.commission,
+			"internal":        totals.internal,
+			"non_publication": totals.nonPublication,
+			"gateway_fee":     totals.gatewayFee,
+			"gross":           totals.gross,
+			"withdrawn":       totals.withdrawn,
+			"available":       totals.available,
+		},
 	})
 }

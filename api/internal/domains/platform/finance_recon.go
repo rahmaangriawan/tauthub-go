@@ -15,9 +15,10 @@ import (
 //
 // Selisih = saldo gateway - wajib ada. Wajib ada di sini kumulatif sampai
 // tanggal akhir rentang, bukan hanya profit dalam rentang, supaya tidak
-// bergantung pada filter periode. Komponen dihitung terpisah dan sisanya
-// ditampilkan sebagai "selisih lain", jadi total komponen selalu sama dengan
-// selisih.
+// bergantung pada filter periode. Profit dihitung dari uang yang diterima
+// (lihat finProfitInRange), jadi satu-satunya penyebab selisih yang diketahui
+// adalah pencairan mitra internal yang dibayar dari luar gateway. Sisanya
+// ditampilkan sebagai "selisih lain", yang seharusnya nol.
 
 const finOrphanPubsFrom = `
 	FROM publications p
@@ -56,17 +57,7 @@ func (d *Deps) finGatewayRecon(ctx context.Context, asOf, toExcl time.Time, excl
 	balance := net - pr.adminWithdrawn
 	gap := balance - required
 
-	nonPub, err := d.queryRow(ctx, `
-		SELECT COALESCE(-SUM(amount_tc) FILTER (WHERE ref_type = 'capture' AND amount_tc < 0), 0)
-		     + COALESCE(-SUM(amount_tc) FILTER (WHERE ref_type = 'adjustment'), 0) AS v
-		FROM credit_ledger_entries
-		WHERE created_at <= $1 AND brand_id::text != ALL($2::text[])`, asOf, excl.brandArr())
-	if err != nil {
-		return nil, err
-	}
-	orphanSum, err := d.queryRow(ctx, `
-		SELECT COALESCE(SUM(credit), 0) AS v, COUNT(*) AS n
-		FROM (SELECT `+finOrphanCreditExpr+` AS credit `+finOrphanPubsFrom+`) x`, asOf, excl.brandArr())
+	orphanCount, err := d.queryRow(ctx, `SELECT COUNT(*) AS n FROM (SELECT 1 `+finOrphanPubsFrom+`) x`, asOf, excl.brandArr())
 	if err != nil {
 		return nil, err
 	}
@@ -79,10 +70,7 @@ func (d *Deps) finGatewayRecon(ctx context.Context, asOf, toExcl time.Time, excl
 		return nil, err
 	}
 
-	aInternalPaid := pr.internalPaid
-	bNonPub := int64(math.Round(nonPub.numOr("v")))
-	cOrphan := int64(math.Round(orphanSum.numOr("v")))
-	residual := gap - aInternalPaid - bNonPub - cOrphan + fee
+	residual := gap - pr.internalPaid
 
 	orphans := make([]map[string]any, 0, len(orphanRows))
 	for _, row := range orphanRows {
@@ -103,18 +91,12 @@ func (d *Deps) finGatewayRecon(ctx context.Context, asOf, toExcl time.Time, excl
 		"required":            required,
 		"gap":                 gap,
 		"components": []map[string]any{
-			{"key": "internal_paid", "label": "Pencairan mitra internal yang sudah dibayar", "amount": aInternalPaid,
+			{"key": "internal_paid", "label": "Pencairan mitra internal yang sudah dibayar", "amount": pr.internalPaid,
 				"note": "Dihitung sebagai penarikan profit, tetapi saldo gateway tidak berkurang karena dibayar dari luar gateway."},
-			{"key": "non_publication", "label": "Pemakaian kredit non-publikasi", "amount": bNonPub,
-				"note": "AI dan potongan saldo manual. Pendapatan Tauthub yang belum masuk hitungan profit."},
-			{"key": "orphan_publications", "label": "Publikasi terbit tanpa catatan penghasilan", "amount": cOrphan,
-				"note": "Kredit sudah terpakai tetapi tidak tercatat sebagai profit maupun hak mitra."},
-			{"key": "gateway_fee", "label": "Fee gateway", "amount": -fee,
-				"note": "Dipotong gateway dari topup, tidak pernah menjadi uang Tauthub."},
 			{"key": "other", "label": "Selisih lain", "amount": residual,
-				"note": "Mis. klien membayar di bawah harga list, sementara profit dihitung dari harga list."},
+				"note": "Seharusnya nol. Bila tidak nol, ada uang masuk atau keluar yang belum tercatat di sistem."},
 		},
-		"orphan_count":        orphanSum.intOr("n", 0),
+		"orphan_count":        orphanCount.intOr("n", 0),
 		"orphan_publications": orphans,
 	}, nil
 }
