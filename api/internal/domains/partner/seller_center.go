@@ -37,7 +37,8 @@ type sellerTodo struct {
 	MediaID  string  `json:"media_id,omitempty"`
 }
 
-var sellerSeverityRank = map[string]int{"urgent": 0, "warning": 1, "info": 2}
+// "waiting" = bukan tugas mitra, hanya menunggu pihak lain (mis. tinjauan tim Tauthub); selalu terakhir.
+var sellerSeverityRank = map[string]int{"urgent": 0, "warning": 1, "info": 2, "waiting": 3}
 
 // sellerAvgPublishHours: rata-rata jam tayang dari health_breakdown (jsonb).
 func sellerAvgPublishHours(raw any) (float64, bool) {
@@ -72,6 +73,22 @@ func sellerRemaining(d time.Duration) string {
 	return itoa(int(d.Hours()/24)) + " hari lagi"
 }
 
+type sellerInactiveText struct{ suffix, detail, severity, query string }
+
+// sellerInactiveReason: kalimat untuk media yang belum aktif di katalog. Slug
+// status mesin (pending_review, archived) tidak pernah sampai ke layar mitra.
+func sellerInactiveReason(status string) sellerInactiveText {
+	switch status {
+	case "pending_review", "pending", "menunggu_review":
+		return sellerInactiveText{"menunggu tinjauan tim Tauthub", "Media baru ditinjau tim Tauthub dulu sebelum tampil di katalog.", "waiting", "status=pending_review"}
+	case "archived":
+		return sellerInactiveText{"diarsipkan", "Media yang diarsipkan tidak tampil di katalog.", "info", "status=archived"}
+	case "rejected":
+		return sellerInactiveText{"ditolak tim Tauthub", "Perbaiki data media sesuai catatan review, lalu ajukan lagi.", "warning", "status=rejected"}
+	}
+	return sellerInactiveText{"belum aktif di katalog", "Media ini belum aktif, jadi klien belum bisa memesan.", "info", ""}
+}
+
 func (d *Deps) SellerCenter(w http.ResponseWriter, r *http.Request) {
 	user, partner, ok := d.auth(w, r)
 	if !ok {
@@ -95,21 +112,31 @@ func (d *Deps) SellerCenter(w http.ResponseWriter, r *http.Request) {
 		domainHealth[h.strOr("id", "")] = h.strOr("domain_health", "")
 	}
 
-	peerPool := d.loadPeerPool(ctx)
-	historyRows, _ := d.queryRows(ctx, `
-		SELECT h.media_id, h.from_price::float8 AS from_price, h.to_price::float8 AS to_price, h.created_at
-		FROM media_price_history h
-		WHERE h.media_id IN (SELECT id FROM media WHERE partner_id = $1)
-		ORDER BY h.created_at DESC
-		LIMIT 200`, partnerID)
-	lastPriceChange := map[string]map[string]any{}
-	for _, h := range historyRows {
-		id := h.strOr("media_id", "")
-		if _, seen := lastPriceChange[id]; seen {
-			continue
-		}
-		lastPriceChange[id] = map[string]any{
-			"from": h.raw("from_price"), "to": h.raw("to_price"), "at": h.timePtr("created_at"),
+	// Minat klien: berapa kali media dipilih ke kampanye dalam 30 hari terakhir,
+	// oleh berapa brand, dan berapa yang lanjut jadi pesanan atau dibatalkan.
+	// Hanya hitungan: nama brand tidak pernah dikirim ke mitra. Bookmark dan
+	// jumlah tayang di katalog tidak tercatat di server, jadi tidak ditampilkan.
+	interestRows, _ := d.queryRows(ctx, `
+		SELECT cmi.media_id,
+		       COUNT(*) FILTER (WHERE cmi.created_at > NOW() - INTERVAL '30 days')::int AS picked,
+		       COUNT(DISTINCT c.brand_id) FILTER (WHERE cmi.created_at > NOW() - INTERVAL '30 days')::int AS brands,
+		       COUNT(*) FILTER (WHERE cmi.created_at > NOW() - INTERVAL '30 days'
+		                          AND EXISTS (SELECT 1 FROM publications p
+		                                      WHERE p.campaign_id = cmi.campaign_id AND p.media_id = cmi.media_id
+		                                        AND p.status <> 'cancelled'))::int AS ordered,
+		       COUNT(*) FILTER (WHERE cmi.created_at > NOW() - INTERVAL '30 days' AND cmi.status = 'cancelled')::int AS cancelled,
+		       COUNT(*)::int AS picked_total
+		FROM campaign_media_items cmi
+		JOIN campaigns c ON c.id = cmi.campaign_id
+		JOIN media m ON m.id = cmi.media_id
+		WHERE m.partner_id = $1
+		GROUP BY cmi.media_id`, partnerID)
+	interestByMedia := make(map[string]map[string]any, len(interestRows))
+	for _, ir := range interestRows {
+		interestByMedia[ir.strOr("media_id", "")] = map[string]any{
+			"picked": ir.intOr("picked", 0), "brands": ir.intOr("brands", 0),
+			"ordered": ir.intOr("ordered", 0), "cancelled": ir.intOr("cancelled", 0),
+			"picked_total": ir.intOr("picked_total", 0),
 		}
 	}
 
@@ -146,54 +173,26 @@ func (d *Deps) SellerCenter(w http.ResponseWriter, r *http.Request) {
 		}
 		crawlStatus := row.strOr("last_status", "")
 
+		interest := interestByMedia[id]
+		if interest == nil {
+			interest = map[string]any{"picked": 0, "brands": 0, "ordered": 0, "cancelled": 0, "picked_total": 0}
+		}
 		card := map[string]any{
 			"id":                    id,
 			"name":                  name,
 			"website_url":           row.raw("website_url"),
 			"status":                row.raw("status"),
-			"media_type":            row.strOr("media_type", "mainstream"),
-			"integration_type":      row.raw("integration_type"),
-			"has_connection":        row.boolOr("has_connection", false),
 			"catalog_visible":       isVisible,
 			"catalog_hidden_reason": reason,
-			"domain_verified":       verified,
-			"dewan_pers_verified":   row.boolOr("dewan_pers_verified", false),
-			"domain_health":         domainHealth[id],
-			"price":                 row.numOr("price"),
-			"link_rel":              existingLinkRel(row),
-			"link_duration_months":  row.intOr("link_duration_months", 12),
-			"seo_da":                row.raw("seo_da"),
-			"seo_pa":                row.raw("seo_pa"),
-			"seo_spam_score":        row.raw("seo_spam_score"),
-			"sw_visits":             row.numPtr("sw_visits"),
-			"rating_avg":            row.numPtr("rating_avg"),
-			"rating_count":          row.intOr("rating_count", 0),
-			"articles_7d":           row.numPtr("articles_7d"),
-			"crawl_last_status":     row.raw("last_status"),
-			"total_terbit":          totalTerbit,
-			"pending_publications":  row.intOr("pending_publications", 0),
-			// Tanpa riwayat order, skor kesehatan belum berarti apa pun.
-			"has_history":     totalTerbit > 0,
-			"health_score":    row.raw("health_score"),
-			"avg_publish_hrs": nil,
+			"interest":              interest,
 		}
-		if hasHours && totalTerbit > 0 {
-			card["avg_publish_hrs"] = hours
-		}
-		// Pembanding harga sebaya (nil bila belum ada harga atau pembanding kurang).
-		self := peerMedia{ID: id, Category: row.strOr("category", ""), MediaType: row.strOr("media_type", "mainstream"), Price: row.numOr("price")}
-		if v, ok := row.num("seo_da"); ok {
-			self.DA = &v
-		}
-		card["price_benchmark"] = benchmarkPrice(self, peerPool)
-		card["last_price_change"] = lastPriceChange[id]
 		media = append(media, card)
 
 		switch reasonStr {
 		case "not_connected":
 			todos = append(todos, sellerTodo{Kind: "media_hidden", Severity: "warning", MediaID: id, Route: "integrations",
 				Title:  name + " belum tersambung, jadi belum tampil di katalog",
-				Detail: "Sambungkan situs Anda di Integrasi supaya klien bisa memesan."})
+				Detail: "Sambungkan situs di Integrasi agar klien bisa memesan."})
 		case "no_price":
 			todos = append(todos, sellerTodo{Kind: "media_hidden", Severity: "warning", MediaID: id, Route: "media",
 				Title:  name + " belum punya harga",
@@ -201,26 +200,27 @@ func (d *Deps) SellerCenter(w http.ResponseWriter, r *http.Request) {
 		case "partner_hidden":
 			todos = append(todos, sellerTodo{Kind: "media_hidden", Severity: "info", MediaID: id, Route: "media",
 				Title:  name + " Anda sembunyikan dari katalog",
-				Detail: "Tampilkan lagi dari Daftar Media bila Anda siap menerima order."})
+				Detail: "Tampilkan lagi dari Daftar Media saat Anda siap menerima pesanan."})
 		case "suspended":
 			todos = append(todos, sellerTodo{Kind: "media_hidden", Severity: "warning", MediaID: id, Route: "dukungan",
 				Title:  name + " ditangguhkan",
-				Detail: "Hubungi tim Tauthub lewat Dukungan untuk tahu alasannya."})
+				Detail: "Tanyakan alasannya lewat Dukungan."})
 		case "inactive":
-			todos = append(todos, sellerTodo{Kind: "media_hidden", Severity: "info", MediaID: id, Route: "media",
-				Title:  name + " belum aktif di katalog",
-				Detail: "Status media: " + row.strOr("status", "-") + ". Media baru ditinjau tim Tauthub dulu."})
+			inactiveReason := sellerInactiveReason(row.strOr("status", ""))
+			todos = append(todos, sellerTodo{Kind: "media_hidden", Severity: inactiveReason.severity, MediaID: id, Route: "media", Query: inactiveReason.query,
+				Title:  name + " " + inactiveReason.suffix,
+				Detail: inactiveReason.detail})
 		}
 
 		if active && domainHealth[id] == "unreachable" {
 			todos = append(todos, sellerTodo{Kind: "domain_down", Severity: "warning", MediaID: id, Route: "link-monitor",
 				Title:  name + " tidak bisa diakses",
-				Detail: "Situs yang sering mati membuat klien ragu memesan, dan artikel yang sudah terbit tidak terpantau."})
+				Detail: "Situs yang sering mati membuat klien ragu memesan, dan artikel terbit tidak bisa dipantau."})
 		}
 		if active && crawlStatus != "" && crawlStatus != "ok" {
 			todos = append(todos, sellerTodo{Kind: "crawler", Severity: "info", MediaID: id, Route: "crawler",
 				Title:  "Crawler Tauthub gagal membaca " + name,
-				Detail: "Tanpa bacaan ini, jumlah artikel mingguan Anda tidak tampil di katalog. Cek Akses Crawler."})
+				Detail: "Tanpa itu, jumlah artikel mingguan tidak tampil di katalog. Cek Akses Crawler."})
 		}
 	}
 
@@ -263,7 +263,7 @@ func (d *Deps) SellerCenter(w http.ResponseWriter, r *http.Request) {
 			todos = append(todos, sellerTodo{Kind: "order_expiring", Severity: sev, Route: "publications",
 				Query: "pub=" + row.strOr("id", ""), Deadline: dl,
 				Title:  "Setujui pesanan \"" + title + "\"",
-				Detail: "Di " + row.strOr("media_name", "media") + ", " + sellerRemaining(remaining) + ". Lewat tenggat, pesanan dibatalkan otomatis dan tidak ada penghasilan."})
+				Detail: "Di " + row.strOr("media_name", "media") + ", " + sellerRemaining(remaining) + ". Lewat batas itu, pesanan dibatalkan otomatis dan Anda tidak dapat penghasilan."})
 		}
 	}
 
@@ -303,8 +303,8 @@ func (d *Deps) SellerCenter(w http.ResponseWriter, r *http.Request) {
 			sev = "warning"
 		}
 		todos = append(todos, sellerTodo{Kind: "whatsapp", Severity: sev, Route: "profile",
-			Title:  "Isi nomor WhatsApp untuk notifikasi order",
-			Detail: "Order baru dan pesanan yang hampir kedaluwarsa bisa sampai ke WhatsApp Anda."})
+			Title:  "Isi nomor WhatsApp untuk notifikasi pesanan",
+			Detail: "Pesanan baru dan pesanan yang hampir kedaluwarsa bisa sampai ke WhatsApp Anda."})
 	}
 	finance := d.partnerFinanceSummary(ctx, partnerID)
 	if partner.BankAccountNumber == nil || strings.TrimSpace(*partner.BankAccountNumber) == "" {
@@ -314,7 +314,7 @@ func (d *Deps) SellerCenter(w http.ResponseWriter, r *http.Request) {
 		}
 		todos = append(todos, sellerTodo{Kind: "payout", Severity: sev, Route: "profile",
 			Title:  "Isi rekening atau e-wallet untuk menarik penghasilan",
-			Detail: "Tanpa data ini penghasilan Anda tidak bisa dicairkan."})
+			Detail: "Tanpa data ini penghasilan tidak bisa dicairkan."})
 	}
 	if unverified > 0 {
 		todos = append(todos, sellerTodo{Kind: "domain_unverified", Severity: "info", Route: "media",

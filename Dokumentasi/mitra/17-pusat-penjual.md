@@ -1,13 +1,13 @@
 # Pusat Penjual
 
-> Pusat Penjual adalah tempat harian Anda sebagai Mitra: apa yang perlu dikerjakan hari ini, pesanan yang menunggu, penghasilan, trafik dari Google, dan kondisi tiap media.
+> Pusat Penjual adalah tempat harian Anda sebagai Mitra: apa yang perlu dikerjakan hari ini, pesanan yang menunggu, penghasilan, trafik dari Google, dan minat klien pada tiap media.
 
 **Lokasi:** menu **RINGKASAN** › **Pusat Penjual**
 **Untuk:** Mitra
 
 ## Gambaran singkat
 
-Halaman ini disusun dari yang paling mendesak. Bagian paling atas, **Perlu dikerjakan**, berisi tugas yang kalau dibiarkan membuat Anda rugi, misalnya pesanan yang hampir dibatalkan otomatis atau media yang tidak tampil di katalog klien. Di bawahnya ada pesanan yang menunggu, penghasilan, trafik dari Google, dan kondisi tiap media.
+Halaman ini disusun dari yang paling mendesak. Bagian paling atas, **Perlu dikerjakan**, berisi tugas yang kalau dibiarkan membuat Anda rugi, misalnya pesanan yang hampir dibatalkan otomatis atau media yang tidak tampil di katalog klien. Di bawahnya ada pesanan yang menunggu, penghasilan, trafik dari Google, dan minat klien pada tiap media.
 
 Semua angka dihitung dari data Anda di Tauthub. Yang belum ada datanya ditulis **Belum ada data**, bukan angka nol atau perkiraan.
 
@@ -60,22 +60,19 @@ Yang tampil: **Klik**, **Tayangan**, dan **Posisi rata-rata** untuk 28 hari tera
 
 Bila klik turun lebih dari 30 persen dari pengambilan sebelumnya (dengan dasar minimal 50 klik), Anda menerima notifikasi **Trafik dari Google turun**.
 
-### Kondisi media
+### Minat klien
 
-Satu kartu per media berisi:
+Satu baris per media menunjukkan apakah klien benar-benar memilihnya, dihitung dari kampanye klien dalam 30 hari terakhir:
 
-- **Tampil di katalog** atau alasan tidak tampil.
-- DA dan PA, kunjungan bulanan, artikel tayang, order berjalan, rating kecepatan, dan rata-rata waktu tayang. Media yang belum pernah menerbitkan artikel ditulis **Belum ada riwayat**.
-- **Harga Anda** dibandingkan dengan media sebaya.
-- Status domain, Dewan Pers, dan sambungan ke Tauthub.
+- **Dipilih klien**: berapa kali media Anda dimasukkan ke kampanye, dan dari berapa brand.
+- **Jadi pesanan**: berapa di antaranya yang lanjut menjadi pesanan.
+- **Dibatalkan**: berapa yang dibatalkan.
 
-#### Pembanding harga sebaya
+Garis tipis di bawahnya menunjukkan porsi yang jadi pesanan. Nama brand tidak ditampilkan.
 
-Harga Anda dibandingkan dengan harga media aktif lain. Pembanding dipilih bertahap: kategori dan jenis media yang sama dengan DA serupa (selisih paling banyak 10), lalu kategori dan jenis media yang sama, lalu jenis media yang sama. Tahap dipakai bila menghasilkan minimal 5 pembanding. Bila tidak ada tahap yang cukup, halaman menulis **Data pembanding belum cukup**.
+Media yang belum tampil di katalog menulis alasannya (misalnya **Belum tersambung**), karena klien belum bisa memilihnya. Media yang tampil tetapi belum dipilih siapa pun menulis **Belum ada klien yang memilih media ini dalam 30 hari terakhir**.
 
-Anda melihat kisaran (dari seperempat terbawah sampai seperempat teratas) dan median, serta apakah harga Anda **Di bawah**, **Dalam**, atau **Di atas** kisaran. Identitas media pembanding tidak pernah ditampilkan.
-
-> **Penting:** Ini pembanding harga, bukan jaminan laku. Harga di atas kisaran bisa membuat order lebih sepi, tetapi situs yang memang lebih kuat boleh lebih mahal.
+> **Catatan:** Jumlah tayang di katalog dan penanda bookmark klien belum tercatat di server, jadi tidak ada di sini. Angka di bagian ini hanya yang benar-benar tercatat.
 
 ## Notifikasi dari Pusat Penjual
 

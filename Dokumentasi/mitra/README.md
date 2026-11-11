@@ -18,7 +18,7 @@ Menu di sisi kiri Dashboard Mitra dikelompokkan seperti tabel di bawah. Kolom **
 | Grup menu | Menu | Fungsi singkat | Panduan |
 |---|---|---|---|
 | RINGKASAN | **Ringkasan** | Gambaran media, pesanan yang menunggu, penghasilan, dan pesan baru, serta pengenalan tampilan dashboard | [Ringkasan](01-ringkasan.md) |
-| RINGKASAN | **Pusat Penjual** | Tugas yang perlu dikerjakan, pesanan yang menunggu, penghasilan, trafik dari Google, dan kondisi tiap media | [Pusat Penjual](17-pusat-penjual.md) |
+| RINGKASAN | **Pusat Penjual** | Tugas yang perlu dikerjakan, pesanan yang menunggu, penghasilan, trafik dari Google, dan minat klien | [Pusat Penjual](17-pusat-penjual.md) |
 | RINGKASAN | **VIP Dashboard** | Halaman keanggotaan khusus Mitra VVIP | [VIP Dashboard](02-vip-dashboard.md) |
 | MEDIA & PUBLIKASI | **Publikasi** | Memeriksa, menyetujui, menolak, dan menerbitkan pesanan artikel | [Publikasi](03-publikasi/README.md) |
 | MEDIA & PUBLIKASI | **Daftar Media** | Mendaftarkan dan mengelola media Anda | [Daftar Media](04-daftar-media/README.md) |

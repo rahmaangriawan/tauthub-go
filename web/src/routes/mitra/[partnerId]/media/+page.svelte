@@ -351,6 +351,13 @@
 		void (async () => {
 			const fresh = await ensureValidSession();
 			if (!fresh) return;
+			// Deep-link dari Pusat Penjual: buka daftar dengan filter status
+			// (mis. ?status=archived untuk halaman arsip). Nilai di luar pilihan
+			// filter diabaikan.
+			const wantedStatus = page.url.searchParams.get('status');
+			if (wantedStatus && ['active', 'pending_review', 'rejected', 'inactive', 'archived'].includes(wantedStatus)) {
+				statusFilter = wantedStatus;
+			}
 			await load();
 			loading = false;
 			// Deep-link dari tab Blogger (Integrasi): langsung buka form tambah
