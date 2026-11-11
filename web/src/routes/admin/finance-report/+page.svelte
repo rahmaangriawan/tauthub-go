@@ -40,6 +40,7 @@
 	};
 	type Summary = {
 		money_in: number; money_in_count: number;
+		money_in_fee?: number; money_in_net?: number;
 		money_out: number; money_out_count: number;
 		money_out_gross: number; money_out_fee: number;
 		net: number;
@@ -895,6 +896,16 @@
 				</div>
 			</div>
 
+			<!-- Ringkasan top up nyata pada periode: untuk dicocokkan dengan
+			     halaman Payments di gateway (Total Amount / Total Fees / Net). -->
+			<div class="flex flex-wrap items-center gap-x-5 gap-y-1 border-b px-4 py-2.5 text-xs text-muted-foreground">
+				<span>{tr("Top up diterima")}: <strong class="tabular-nums text-foreground">{fmtNum(summary.money_in_count)}</strong> {tr("transaksi")}</span>
+				<span>{tr("Bruto")}: <strong class="tabular-nums text-foreground">{rp(summary.money_in)}</strong></span>
+				<span>{tr("Fee gateway")}: <strong class="tabular-nums text-foreground">{rp(summary.money_in_fee ?? 0)}</strong></span>
+				<span>{tr("Net masuk wallet gateway")}: <strong class="tabular-nums" style="color: var(--success);">{rp(summary.money_in_net ?? summary.money_in)}</strong></span>
+				<span>{tr("Sandbox dan akun uji tidak dihitung.")}</span>
+			</div>
+
 			<div class="overflow-x-auto">
 				<table class="w-full text-sm" style="min-width: 920px;">
 					<thead>
@@ -936,7 +947,7 @@
 									<p class="font-semibold tabular-nums" style="color: {entry.direction === 'in' ? 'var(--success)' : 'var(--destructive)'};">
 										{entry.direction === 'in' ? '+' : '−'} {rp(entry.amount)}
 									</p>
-									{#if entry.direction === 'out' && entry.fee_amount > 0}
+									{#if entry.fee_amount > 0}
 										<p class="text-[11px] text-muted-foreground tabular-nums">
 											{tr("bruto")} {rp(entry.gross_amount)} · {tr("biaya")} {rp(entry.fee_amount)}
 										</p>

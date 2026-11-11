@@ -37,12 +37,13 @@ func (d *Deps) FinanceDormantBrands(w http.ResponseWriter, r *http.Request) {
 		   LEFT JOIN users u       ON u.id = b.created_by
 		  WHERE (w.available_tc + w.reserved_tc) > 0
 		    AND (b.deleted_at IS NULL)
+		    AND w.brand_id::text != ALL($3::text[])
 		  GROUP BY w.brand_id, b.name, b.client_name, b.ownership_type,
 		           w.available_tc, w.reserved_tc, u.email, u.display_name
 		 HAVING MAX(le.created_at) IS NULL
-		     OR MAX(le.created_at) < NOW() - ($1 || ' days')::interval
+		     OR MAX(le.created_at) < NOW() - make_interval(days => $1::int)
 		  ORDER BY (w.available_tc + w.reserved_tc) DESC
-		  LIMIT $2`, days, limit)
+		  LIMIT $2`, days, limit, d.finLoadFilter(r.Context()).brandArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return

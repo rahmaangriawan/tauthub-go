@@ -83,49 +83,57 @@ func (f finFilterCtx) partnerArr() []string {
 // finBalancesAsOf: posisi (available_tc, reserved_tc) agregat semua brand yang
 // tidak dikecualikan pada titik waktu `asOf`.
 //
-// Jika `asOf` >= sekarang-1menit, pakai `credit_wallets` (otoritatif, cepat).
-// Kalau lampau, rekonstruksi dari `credit_ledger_entries` dengan konvensi:
+// Titik tolaknya selalu `credit_wallets` hari ini (otoritatif), lalu mutasi
+// ledger SETELAH asOf dibalik. Ledger sendiri tidak lengkap (ada saldo yang
+// diubah tanpa entri), jadi menjumlah ledger dari nol akan meleset; berangkat
+// dari wallet membuat posisi hari ini selalu tepat dan posisi lampau hanya
+// bergantung pada mutasi di antaranya.
 //
-//   available_delta: topup | refund | adjustment | reserve | release → amount_tc (signed)
-//                    capture → 0 (hanya menggeser reserved→captured, available tidak kena)
-//   reserved_delta : reserve | release → -amount_tc
-//                    capture         → +amount_tc (amount_tc negatif untuk capture)
-//
-// Konvensi diambil dari insertLedger di clienttaut/brandflow (lihat
-// support.go yang menulis AmountTC negatif untuk reserve/capture dan positif
-// untuk release/topup).
+// Konvensi tanda amount_tc (lihat insertLedger di clienttaut/brandflow):
+//   topup/refund/adjustment/release : bertanda, mengubah available
+//   reserve (negatif)               : available turun, reserved naik
+//   capture positif                 : reserved -> captured
+//   capture negatif                 : available -> captured (tanpa reserve)
 func (d *Deps) finBalancesAsOf(ctx context.Context, asOf time.Time, excl finFilterCtx) (available, reserved int64, err error) {
-	// Toleransi "sekarang": 60 detik supaya today's end-of-day cutoff dipakai
-	// query cepat dari credit_wallets.
-	now := time.Now()
-	if asOf.After(now.Add(-time.Minute)) {
-		row, qErr := d.queryRow(ctx, `
-			SELECT COALESCE(SUM(available_tc), 0) AS available,
-			       COALESCE(SUM(reserved_tc), 0)  AS reserved
-			FROM credit_wallets
-			WHERE brand_id::text != ALL($1::text[])`, excl.brandArr())
-		if qErr != nil {
-			return 0, 0, qErr
-		}
-		return int64(math.Round(row.numOr("available"))), int64(math.Round(row.numOr("reserved"))), nil
+	row, qErr := d.queryRow(ctx, `
+		SELECT COALESCE(SUM(available_tc), 0) AS available,
+		       COALESCE(SUM(reserved_tc), 0)  AS reserved
+		FROM credit_wallets
+		WHERE brand_id::text != ALL($1::text[])`, excl.brandArr())
+	if qErr != nil {
+		return 0, 0, qErr
+	}
+	available = int64(math.Round(row.numOr("available")))
+	reserved = int64(math.Round(row.numOr("reserved")))
+	if asOf.After(time.Now().Add(-time.Minute)) {
+		return available, reserved, nil
 	}
 
-	row, qErr := d.queryRow(ctx, `
+	after, qErr := d.queryRow(ctx, `
 		SELECT
 		  COALESCE(SUM(CASE
 		    WHEN ref_type IN ('topup','refund','adjustment','reserve','release') THEN amount_tc
+		    WHEN ref_type = 'capture' AND amount_tc < 0 THEN amount_tc
 		    ELSE 0 END), 0) AS available,
 		  COALESCE(SUM(CASE
 		    WHEN ref_type IN ('reserve','release') THEN -amount_tc
-		    WHEN ref_type = 'capture' THEN amount_tc
+		    WHEN ref_type = 'capture' AND amount_tc > 0 THEN -amount_tc
 		    ELSE 0 END), 0) AS reserved
 		FROM credit_ledger_entries
-		WHERE created_at <= $1
+		WHERE created_at > $1
 		  AND brand_id::text != ALL($2::text[])`, asOf, excl.brandArr())
 	if qErr != nil {
 		return 0, 0, qErr
 	}
-	return int64(math.Round(row.numOr("available"))), int64(math.Round(row.numOr("reserved"))), nil
+	available -= int64(math.Round(after.numOr("available")))
+	reserved -= int64(math.Round(after.numOr("reserved")))
+	if available < 0 {
+		available = 0
+	}
+	if reserved < 0 {
+		reserved = 0
+	}
+	return available, reserved, nil
 }
 
 // finPartnerUnpaidAsOf: komisi mitra yang BELUM dibayar pada titik `asOf`.

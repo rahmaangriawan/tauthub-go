@@ -33,6 +33,15 @@ const financeFeeExpr = `CASE
 	ELSE $4::numeric
 END`
 
+// Topup "uang nyata": lunas di gateway production. Mode sandbox (provider
+// sandbox atau sumopod environment sandbox) tidak pernah masuk ke wallet
+// gateway, jadi tidak boleh dihitung sebagai uang masuk.
+const financeRealTopupCond = `t.purpose = 'topup' AND t.status = 'paid'
+	  AND t.gateway_environment = 'production' AND t.gateway_provider <> 'sandbox'`
+
+// Fee gateway asli dari callback (SumoPod mengirim data.fee); 0 bila tidak ada.
+const financeTopupFeeExpr = `COALESCE(NULLIF(t.raw_callback->'data'->>'fee', '')::numeric, 0)`
+
 // financeEntriesCTE: tiga sumber arus kas (topup, pencairan mitra, penarikan
 // profit admin) dengan bentuk kolom seragam supaya bisa diurutkan bersama,
 // dipaginasi, dan diekspor sebagai satu tabel.
@@ -46,13 +55,14 @@ WITH combined AS (
 	       COALESCE(NULLIF(t.reference, ''), NULLIF(t.external_transaction_id, ''), '')::text AS reference,
 	       COALESCE(t.gateway_provider, '')::text AS method,
 	       t.amount::numeric AS gross_amount,
-	       0::numeric AS fee_amount,
-	       t.amount::numeric AS amount,
+	       ` + financeTopupFeeExpr + ` AS fee_amount,
+	       t.amount::numeric - ` + financeTopupFeeExpr + ` AS amount,
 	       t.status::text AS status,
 	       COALESCE(t.external_transaction_id, '')::text AS external_id
 	FROM payment_transactions t
 	LEFT JOIN brands b ON b.id = t.brand_id
-	WHERE t.purpose = 'topup' AND t.status = 'paid'
+	WHERE ` + financeRealTopupCond + `
+	  AND (t.brand_id IS NULL OR t.brand_id::text != ALL($7::text[]))
 	  AND COALESCE(t.paid_at, t.created_at) >= $1
 	  AND COALESCE(t.paid_at, t.created_at) < $2
 	UNION ALL
@@ -71,6 +81,7 @@ WITH combined AS (
 	FROM settlements s
 	LEFT JOIN partners p ON p.id = s.partner_id
 	WHERE s.status = 'paid'
+	  AND s.partner_id::text != ALL($8::text[])
 	  AND COALESCE(s.paid_at, s.updated_at) >= $1
 	  AND COALESCE(s.paid_at, s.updated_at) < $2
 	UNION ALL
@@ -189,12 +200,17 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	feeCfg := d.finFeeCfg(ctx)
 
 	// ---------- ringkasan rentang ----------
+	// Akun internal/dev/uji dikecualikan dari semua angka di laporan ini.
+	excl := d.finLoadFilter(ctx)
+
 	inRow, err := d.queryRow(ctx, `
-		SELECT COUNT(*)::int AS n, COALESCE(SUM(amount), 0) AS total
-		FROM payment_transactions
-		WHERE purpose = 'topup' AND status = 'paid'
-		  AND COALESCE(paid_at, created_at) >= $1
-		  AND COALESCE(paid_at, created_at) < $2`, fromTs, toExcl)
+		SELECT COUNT(*)::int AS n, COALESCE(SUM(t.amount), 0) AS total,
+		       COALESCE(SUM(`+financeTopupFeeExpr+`), 0) AS fee
+		FROM payment_transactions t
+		WHERE `+financeRealTopupCond+`
+		  AND (t.brand_id IS NULL OR t.brand_id::text != ALL($3::text[]))
+		  AND COALESCE(t.paid_at, t.created_at) >= $1
+		  AND COALESCE(t.paid_at, t.created_at) < $2`, fromTs, toExcl, excl.brandArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -206,8 +222,9 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(SUM(`+financeNetExpr+`), 0) AS net
 		FROM settlements s
 		WHERE s.status = 'paid'
+		  AND s.partner_id::text != ALL($5::text[])
 		  AND COALESCE(s.paid_at, s.updated_at) >= $1
-		  AND COALESCE(s.paid_at, s.updated_at) < $2`, fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR)
+		  AND COALESCE(s.paid_at, s.updated_at) < $2`, fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, excl.partnerArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -216,10 +233,8 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	moneyIn := inRow.numOr("total")
 	moneyOut := outRow.numOr("net")
 
-	// Konteks exclude akun internal/dev + reconstruction wallet AS-OF tanggal
-	// akhir rentang (toDate 23:59). Dashboard owner meminta filter tanggal
+	// Posisi wallet AS-OF tanggal akhir rentang (toDate 23:59): filter tanggal
 	// berdampak ke 5 KPI balance-sheet, bukan cuma arus kas.
-	excl := d.finLoadFilter(ctx)
 	asOf := toDate.Add(24*time.Hour - time.Second)
 
 	availableAt, reservedAt, err := d.finBalancesAsOf(ctx, asOf, excl)
@@ -282,6 +297,8 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	summary := map[string]any{
 		"money_in":                 finReportInt(moneyIn),
 		"money_in_count":           inRow.intOr("n", 0),
+		"money_in_fee":             finReportInt(inRow.numOr("fee")),
+		"money_in_net":             finReportInt(moneyIn - inRow.numOr("fee")),
 		"money_out":                finReportInt(moneyOut),
 		"money_out_count":          outRow.intOr("n", 0),
 		"money_out_gross":          finReportInt(outRow.numOr("gross")),
@@ -315,13 +332,14 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, financeReportTZ).AddDate(0, -11, 0)
 	monthEnd := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, financeReportTZ).AddDate(0, 1, 0)
 	inMonths, err := d.queryRows(ctx, `
-		SELECT to_char(COALESCE(paid_at, created_at) AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS month,
-		       COALESCE(SUM(amount), 0) AS total
-		FROM payment_transactions
-		WHERE purpose = 'topup' AND status = 'paid'
-		  AND COALESCE(paid_at, created_at) >= $1
-		  AND COALESCE(paid_at, created_at) < $2
-		GROUP BY 1`, monthStart, monthEnd)
+		SELECT to_char(COALESCE(t.paid_at, t.created_at) AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS month,
+		       COALESCE(SUM(t.amount), 0) AS total
+		FROM payment_transactions t
+		WHERE `+financeRealTopupCond+`
+		  AND (t.brand_id IS NULL OR t.brand_id::text != ALL($3::text[]))
+		  AND COALESCE(t.paid_at, t.created_at) >= $1
+		  AND COALESCE(t.paid_at, t.created_at) < $2
+		GROUP BY 1`, monthStart, monthEnd, excl.brandArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -331,9 +349,10 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(SUM(`+financeNetExpr+`), 0) AS total
 		FROM settlements s
 		WHERE s.status = 'paid'
+		  AND s.partner_id::text != ALL($5::text[])
 		  AND COALESCE(s.paid_at, s.updated_at) >= $1
 		  AND COALESCE(s.paid_at, s.updated_at) < $2
-		GROUP BY 1`, monthStart, monthEnd, feeCfg.ewalletPct, feeCfg.bankIDR)
+		GROUP BY 1`, monthStart, monthEnd, feeCfg.ewalletPct, feeCfg.bankIDR, excl.partnerArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -346,8 +365,9 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(SUM(client_price), 0) AS total
 		FROM publications
 		WHERE status = 'published' AND published_at IS NOT NULL
+		  AND brand_id::text != ALL($3::text[])
 		  AND published_at >= $1 AND published_at < $2
-		GROUP BY 1`, monthStart, monthEnd)
+		GROUP BY 1`, monthStart, monthEnd, excl.brandArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -389,7 +409,7 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		WHERE ($5::text = '' OR direction = $5::text)
 		  AND ($6::text = '' OR kind = $6::text)
 		ORDER BY occurred_at DESC, id DESC`
-	args := []any{fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, direction, kind}
+	args := []any{fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, direction, kind, excl.brandArr(), excl.partnerArr()}
 	if limit > 0 {
 		entriesSQL += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
 		args = append(args, limit, offset)
@@ -431,7 +451,7 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		SELECT COUNT(*)::int AS n FROM combined
 		WHERE ($5::text = '' OR direction = $5::text)
 		  AND ($6::text = '' OR kind = $6::text)`,
-		fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, direction, kind)
+		fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, direction, kind, excl.brandArr(), excl.partnerArr())
 	if err != nil {
 		writeErr(w, d, err)
 		return
