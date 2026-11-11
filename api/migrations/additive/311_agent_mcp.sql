@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS agent_clients (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name               TEXT NOT NULL,
     token_hash         TEXT NOT NULL UNIQUE,
-    read_as_user_id    UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    -- users.id adalah CHAR(36) (ULID/UUID sebagai string), bukan UUID.
+    read_as_user_id    CHAR(36) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_used_at       TIMESTAMPTZ,
     revoked_at         TIMESTAMPTZ
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS agent_actions (
     required_permission  TEXT NOT NULL DEFAULT '',
     status               TEXT NOT NULL DEFAULT 'proposed'
         CHECK (status IN ('proposed','executing','executed','failed','rejected','expired')),
-    approved_by          UUID REFERENCES users(id) ON DELETE SET NULL,
+    approved_by          CHAR(36) REFERENCES users(id) ON DELETE SET NULL,
     telegram_chat_id     BIGINT,
     telegram_message_id  BIGINT,
     result               JSONB,

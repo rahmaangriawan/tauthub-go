@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS mcp_config (
     telegram_chat_ids          BIGINT[] NOT NULL DEFAULT '{}'::bigint[],
     writes_enabled             BOOLEAN  NOT NULL DEFAULT TRUE,
     max_credit_adjust_tc       BIGINT   NOT NULL DEFAULT 50000000,
-    updated_by                 UUID REFERENCES users(id),
+    -- users.id adalah CHAR(36) di skema ini.
+    updated_by                 CHAR(36) REFERENCES users(id),
     updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
