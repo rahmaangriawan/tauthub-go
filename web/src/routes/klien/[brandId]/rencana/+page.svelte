@@ -210,7 +210,8 @@
 	.rc-how li { position: relative; display: flex; flex-direction: column; gap: 2px; padding-left: 36px; counter-increment: step; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
 	.rc-how li b { font-size: 14px; font-weight: 600; color: var(--foreground); }
 	.rc-how li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--foreground); }
-	.rc-how li + li::after { content: ''; position: absolute; left: 12px; top: -16px; height: 14px; width: 1px; background: var(--border); }
+	.rc-how li::before { z-index: 1; }
+	.rc-how li:not(:last-child)::after { content: ''; position: absolute; left: 12px; top: 28px; bottom: -22px; width: 1px; background: var(--border); }
 	.rc-muted { font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
 	.rc-list { padding: 0; list-style: none; overflow: hidden; margin-top: 12px; }
 	.rc-list li + li { border-top: 1px solid var(--border); }
