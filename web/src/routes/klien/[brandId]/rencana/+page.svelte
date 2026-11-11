@@ -62,7 +62,7 @@
 	let perWeekInput = $state('');
 	const perWeekValidCustom = $derived(/^\d+$/.test(perWeekInput) && Number(perWeekInput) >= 1 && Number(perWeekInput) <= PER_WEEK_MAX);
 	const perWeekValid = $derived(perWeekMode === 'preset' || perWeekValidCustom);
-	const perWeekError = $derived(perWeekMode === 'custom' && !perWeekValidCustom ? tr('Isi angka bulat 1 sampai 3.') : '');
+	const perWeekError = $derived(perWeekMode === 'custom' && perWeekInput !== '' && !perWeekValidCustom ? tr('Isi angka bulat 1 sampai 3.') : '');
 	const totalArticles = $derived(weeks * perWeek);
 
 	function setPreset(n: number) {
@@ -70,6 +70,7 @@
 		perWeek = n;
 	}
 	function onCustomInput(raw: string) {
+		perWeekMode = 'custom';
 		perWeekInput = raw.trim();
 		if (/^\d+$/.test(perWeekInput)) {
 			const n = Number(perWeekInput);
@@ -146,13 +147,11 @@
 						<div class="rc-seg">
 							<button type="button" aria-pressed={perWeekMode === 'preset' && perWeek === 1} class:on={perWeekMode === 'preset' && perWeek === 1} onclick={() => setPreset(1)}>1</button>
 							<button type="button" aria-pressed={perWeekMode === 'preset' && perWeek === 2} class:on={perWeekMode === 'preset' && perWeek === 2} onclick={() => setPreset(2)}>2</button>
-							<button type="button" aria-pressed={perWeekMode === 'custom'} class:on={perWeekMode === 'custom'} onclick={() => (perWeekMode = 'custom')}>{tr('Lainnya')}</button>
 						</div>
-						{#if perWeekMode === 'custom'}
-							<input class="app-input rc-custom" type="number" inputmode="numeric" min="1" max={PER_WEEK_MAX} step="1"
-								placeholder="1–{PER_WEEK_MAX}" value={perWeekInput} aria-invalid={!!perWeekError}
-								oninput={(e) => onCustomInput((e.currentTarget as HTMLInputElement).value)} />
-						{/if}
+						<input class="app-input rc-custom" type="number" inputmode="numeric" min="1" max={PER_WEEK_MAX} step="1"
+							placeholder={tr('Angka lain')} value={perWeekInput} aria-label={tr('Artikel per minggu, angka lain')}
+							aria-invalid={!!perWeekError}
+							oninput={(e) => onCustomInput((e.currentTarget as HTMLInputElement).value)} />
 					</div>
 					{#if perWeekError}<span class="rc-bad">{perWeekError}</span>{/if}
 				</div>
@@ -233,7 +232,7 @@
 	.rc-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--primary); }
 	.rc-range { width: 100%; accent-color: var(--primary); margin: 6px 0 0; }
 	.rc-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted-foreground); }
-	.rc-perweek { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; align-items: center; }
+	.rc-perweek { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 8px; align-items: center; }
 	.rc-custom { height: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 	.rc-btn { align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
 	.rc-how { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
