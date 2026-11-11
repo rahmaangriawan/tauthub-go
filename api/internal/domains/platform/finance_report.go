@@ -33,8 +33,9 @@ const financeFeeExpr = `CASE
 	ELSE $4::numeric
 END`
 
-// financeEntriesCTE: dua arah arus kas dengan bentuk kolom seragam supaya bisa
-// diurutkan bersama, dipaginasi, dan diekspor sebagai satu tabel.
+// financeEntriesCTE: tiga sumber arus kas (topup, pencairan mitra, penarikan
+// profit admin) dengan bentuk kolom seragam supaya bisa diurutkan bersama,
+// dipaginasi, dan diekspor sebagai satu tabel.
 const financeEntriesCTE = `
 WITH combined AS (
 	SELECT 'in'::text AS direction,
@@ -72,6 +73,23 @@ WITH combined AS (
 	WHERE s.status = 'paid'
 	  AND COALESCE(s.paid_at, s.updated_at) >= $1
 	  AND COALESCE(s.paid_at, s.updated_at) < $2
+	UNION ALL
+	SELECT 'out'::text,
+	       w.id::text,
+	       w.created_at,
+	       'admin_withdrawal'::text,
+	       'Tauthub (Rek. Operasional)'::text,
+	       COALESCE(w.reference, '')::text,
+	       'manual'::text,
+	       w.amount::numeric,
+	       0::numeric,
+	       w.amount::numeric,
+	       w.status::text,
+	       ''::text
+	FROM admin_profit_withdrawals w
+	WHERE w.status = 'paid'
+	  AND w.created_at >= $1
+	  AND w.created_at < $2
 )
 `
 
@@ -150,6 +168,16 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, errUnprocessable("Invalid report type filter"))
 		return
 	}
+	// Filter jenis mutasi: topup | settlement | admin_withdrawal.
+	kind := strings.TrimSpace(q.Get("kind"))
+	switch kind {
+	case "", "all":
+		kind = ""
+	case "topup", "settlement", "admin_withdrawal":
+	default:
+		writeErr(w, d, errUnprocessable("Invalid kind filter"))
+		return
+	}
 
 	limit := clampInt(q.Get("limit"), 20, 1, 200)
 	offset := clampInt(q.Get("offset"), 0, 0, 1<<30)
@@ -188,6 +216,14 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	moneyIn := inRow.numOr("total")
 	moneyOut := outRow.numOr("net")
 
+	// Posisi profit Tauthub (gross 25% × GMV publikasi terbit, dikurangi yang
+	// sudah tercatat tertarik lewat admin_profit_withdrawals).
+	profitGross, profitWithdrawn, profitAvailable, err := d.adminProfitPosition(ctx)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
+
 	// ---------- posisi berjalan (tidak dibatasi rentang) ----------
 	topupPending, _ := d.queryRow(ctx, `
 		SELECT COUNT(*)::int AS n, COALESCE(SUM(amount), 0) AS total
@@ -204,8 +240,12 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		WHERE s.status IN ('pending', 'approved', 'processing')`, feeCfg.ewalletPct, feeCfg.bankIDR)
 	// Liabilitas klien = saldo yang belum terpakai. captured tidak dihitung:
 	// uang itu sudah menjadi biaya publikasi/AI (pendapatan), bukan kewajiban.
+	// available dan reserved dipecah supaya dashboard bisa menampilkan "Dana
+	// Titipan Klien" dan "Dana Tertahan (Escrow)" terpisah.
 	clientBalance, _ := d.queryRow(ctx, `
-		SELECT COALESCE(SUM(available_tc + reserved_tc), 0) AS total FROM credit_wallets`)
+		SELECT COALESCE(SUM(available_tc), 0) AS available,
+		       COALESCE(SUM(reserved_tc), 0) AS reserved
+		FROM credit_wallets`)
 	partnerUnpaid, _ := d.queryRow(ctx, `
 		SELECT COALESCE(SUM(e.amount), 0) AS total
 		FROM partner_earnings e
@@ -234,6 +274,12 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		WHERE status = 'approved'
 		  AND reviewed_at >= $1 AND reviewed_at < $2`, fromTs, toExcl)
 
+	clientAvailable := finReportInt(clientBalance.numOr("available"))
+	clientReserved := finReportInt(clientBalance.numOr("reserved"))
+	partnerUnpaidInt := finReportInt(partnerUnpaid.numOr("total"))
+	cashRequired := int64(clientAvailable) + int64(clientReserved) +
+		int64(partnerUnpaidInt) + profitAvailable
+
 	summary := map[string]any{
 		"money_in":                 finReportInt(moneyIn),
 		"money_in_count":           inRow.intOr("n", 0),
@@ -246,10 +292,20 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		"topup_pending_count":      topupPending.intOr("n", 0),
 		"settlement_pending":       finReportInt(settlementPending.numOr("total")),
 		"settlement_pending_count": settlementPending.intOr("n", 0),
-		"client_balance":           finReportInt(clientBalance.numOr("total")),
-		"partner_unpaid":           finReportInt(partnerUnpaid.numOr("total")),
+		// client_balance (total titipan) dipertahankan untuk kompatibilitas
+		// kartu "Dana klien" lama. Pecahan ada di dua field berikut:
+		"client_balance":           clientAvailable + clientReserved,
+		"client_available":         clientAvailable, // Dana Titipan Klien
+		"client_reserved":          clientReserved,  // Dana Tertahan (Escrow)
+		"partner_unpaid":           partnerUnpaidInt,
 		"partner_payable_total":    finReportInt(settlementPending.numOr("total")),
 		"partner_payable_count":    partnerPayableCount.intOr("n", 0),
+		// Profit Tauthub (kotor 25% × GMV publikasi terbit, tanpa potong fee).
+		"tauthub_revenue_gross":        profitGross,
+		"tauthub_withdrawn":            profitWithdrawn,
+		"tauthub_available_to_withdraw": profitAvailable,
+		// Jumlah fisik yang wajib ada di rekening escrow.
+		"cash_required_in_bank":   cashRequired,
 		"invoice_paid":             finReportInt(invoiceRow.numOr("total")),
 		"invoice_paid_count":       invoiceRow.intOr("n", 0),
 		"compensation_credits":     finReportInt(compensationRow.numOr("total")),
@@ -283,6 +339,20 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
+	// GMV = total nilai publikasi terbit (client_price × jumlah terbit) per
+	// bulan. Dipakai chart "Top Up vs GMV vs Pencairan Mitra" supaya owner
+	// lihat beda "uang masuk" vs "yang benar-benar jadi omzet".
+	gmvMonths, err := d.queryRows(ctx, `
+		SELECT to_char(published_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS month,
+		       COALESCE(SUM(client_price), 0) AS total
+		FROM publications
+		WHERE status = 'published' AND published_at IS NOT NULL
+		  AND published_at >= $1 AND published_at < $2
+		GROUP BY 1`, monthStart, monthEnd)
+	if err != nil {
+		writeErr(w, d, err)
+		return
+	}
 	inByMonth := make(map[string]float64, len(inMonths))
 	for _, row := range inMonths {
 		inByMonth[row.strOr("month", "")] = row.numOr("total")
@@ -290,6 +360,10 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	outByMonth := make(map[string]float64, len(outMonths))
 	for _, row := range outMonths {
 		outByMonth[row.strOr("month", "")] = row.numOr("total")
+	}
+	gmvByMonth := make(map[string]float64, len(gmvMonths))
+	for _, row := range gmvMonths {
+		gmvByMonth[row.strOr("month", "")] = row.numOr("total")
 	}
 	monthly := make([]map[string]any, 0, 12)
 	for i := 0; i < 12; i++ {
@@ -300,6 +374,7 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 			"label":     fmt.Sprintf("%s %02d", financeMonthShort[int(m.Month())-1], m.Year()%100),
 			"money_in":  finReportInt(inByMonth[key]),
 			"money_out": finReportInt(outByMonth[key]),
+			"gmv":       finReportInt(gmvByMonth[key]),
 		})
 	}
 
@@ -313,8 +388,9 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 	entriesSQL := financeEntriesCTE + `
 		SELECT * FROM combined
 		WHERE ($5::text = '' OR direction = $5::text)
+		  AND ($6::text = '' OR kind = $6::text)
 		ORDER BY occurred_at DESC, id DESC`
-	args := []any{fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, direction}
+	args := []any{fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, direction, kind}
 	if limit > 0 {
 		entriesSQL += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
 		args = append(args, limit, offset)
@@ -354,8 +430,9 @@ func (d *Deps) FinanceReport(w http.ResponseWriter, r *http.Request) {
 
 	countRow, err := d.queryRow(ctx, financeEntriesCTE+`
 		SELECT COUNT(*)::int AS n FROM combined
-		WHERE ($5::text = '' OR direction = $5::text)`,
-		fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, direction)
+		WHERE ($5::text = '' OR direction = $5::text)
+		  AND ($6::text = '' OR kind = $6::text)`,
+		fromTs, toExcl, feeCfg.ewalletPct, feeCfg.bankIDR, direction, kind)
 	if err != nil {
 		writeErr(w, d, err)
 		return
@@ -387,11 +464,17 @@ func (d *Deps) finReportCSV(w http.ResponseWriter, rows []rowMap, toDate time.Ti
 		if t, ok := row.raw("occurred_at").(time.Time); ok {
 			occurred = t.In(financeReportTZ).Format("2006-01-02 15:04")
 		}
-		direction, kind := "Masuk", "Top Up Saldo"
+		direction, kindLabel := "Masuk", "Top Up Saldo"
 		if row.strOr("direction", "") == "out" {
-			direction, kind = "Keluar", "Pencairan Mitra"
+			direction = "Keluar"
+			switch row.strOr("kind", "") {
+			case "admin_withdrawal":
+				kindLabel = "Penarikan Profit Admin"
+			default:
+				kindLabel = "Pencairan Mitra"
+			}
 		}
-		b.WriteString(opCSVLine([]any{occurred, direction, kind,
+		b.WriteString(opCSVLine([]any{occurred, direction, kindLabel,
 			row.strOr("counterparty", ""), row.strOr("reference", ""), row.strOr("method", ""),
 			finReportInt(row.numOr("gross_amount")), finReportInt(row.numOr("fee_amount")),
 			finReportInt(row.numOr("amount")), row.strOr("status", ""), row.strOr("external_id", "")}))

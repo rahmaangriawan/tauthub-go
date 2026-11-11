@@ -1061,6 +1061,10 @@ func run() error {
 			// Credits / invoices / packages / orders / revenue / settlements / referrals / VIP.
 			authed.Get("/platform/finance/report", platformDeps.FinanceReport)
 			authed.Get("/platform/finance/partner-payables", platformDeps.FinancePartnerPayables)
+			authed.Get("/platform/finance/dormant-brands", platformDeps.FinanceDormantBrands)
+			authed.Get("/platform/finance/admin-withdrawals", platformDeps.AdminProfitWithdrawalsList)
+			authed.Post("/platform/finance/admin-withdrawals", platformDeps.AdminProfitWithdrawalCreate)
+			authed.Put("/platform/finance/admin-withdrawals/{withdrawalId}/void", platformDeps.AdminProfitWithdrawalVoid)
 			authed.Get("/platform/credits", platformDeps.CreditsConfigGet)
 			authed.Post("/platform/credits", platformDeps.CreditsAdjust)
 			authed.Put("/platform/credits", platformDeps.CreditsConfigPut)
