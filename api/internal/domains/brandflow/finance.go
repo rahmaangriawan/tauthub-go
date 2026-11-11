@@ -90,6 +90,8 @@ type bsInvoiceData struct {
 	CompanyName string `json:"company_name"`
 	NPWP        string `json:"npwp"`
 	NPWPAddress string `json:"npwp_address"`
+	// PONumber: nomor PO klien, opsional, tampil di invoice.
+	PONumber string `json:"po_number,omitempty"`
 }
 
 // CreditsTopupCreate: POST /v1/brands/{brandId}/credits/topup
@@ -175,11 +177,19 @@ func (d *Deps) CreditsTopupCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// note = JSON.stringify(invoice) dari client — payload tidak valid → null.
+	// Data faktur yang dikirim tapi tidak lengkap atau NPWP-nya salah ditolak dengan
+	// pesan jelas; sebelumnya dibuang diam-diam sehingga klien mengira faktur akan terbit.
 	var invoiceData any
 	if note != "" {
 		var parsed map[string]any
-		if json.Unmarshal([]byte(note), &parsed) == nil {
-			if inv, ok := bsParseInvoice(parsed); ok {
+		if json.Unmarshal([]byte(note), &parsed) == nil && parsed != nil {
+			if _, hasCompany := parsed["company_name"]; hasCompany || parsed["npwp"] != nil {
+				inv, ok := bsParseInvoice(parsed)
+				if !ok {
+					httpx.Error(w, http.StatusUnprocessableEntity,
+						"Data faktur belum benar. Nama perusahaan, NPWP (15 atau 16 digit), dan alamat sesuai NPWP wajib diisi.")
+					return
+				}
 				invoiceData = inv
 			}
 		}
@@ -248,6 +258,18 @@ func bsParseInvoice(body map[string]any) (bsInvoiceData, bool) {
 			return out, false
 		}
 		*f.dst = trimmed
+	}
+	digits, msg := bsNormalizeNPWP(out.NPWP)
+	if msg != "" {
+		return out, false
+	}
+	out.NPWP = digits
+	if raw, ok := body["po_number"].(string); ok {
+		po := strings.TrimSpace(raw)
+		if utf8.RuneCountInString(po) > 60 {
+			return out, false
+		}
+		out.PONumber = po
 	}
 	return out, true
 }

@@ -658,7 +658,49 @@ func (d *Deps) payPostTopUpOnTx(ctx context.Context, tx pgx.Tx, brandID, userID,
 		reason, key, userID); err != nil {
 		return payTopUpOutcome{}, err
 	}
+	d.payCreateTopupInvoiceOnTx(ctx, tx, brandID, userID, paymentTxID, amountIDR, tc)
 	return payTopUpOutcome{TC: tc, RateIDR: rate}, nil
+}
+
+// payCreateTopupInvoiceOnTx: invoice otomatis untuk top-up yang meminta faktur
+// (payment_transactions.invoice_data terisi). Satu pembayaran satu invoice
+// (unik per payment_transaction_id), jadi webhook ganda tidak menggandakannya.
+// Dijalankan dalam savepoint: kegagalan membuat invoice tidak boleh
+// membatalkan kredit saldo yang sudah dibayar.
+func (d *Deps) payCreateTopupInvoiceOnTx(ctx context.Context, tx pgx.Tx, brandID, userID, paymentTxID string, amountIDR, tc int) {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return
+	}
+	var raw []byte
+	if err := sp.QueryRow(ctx, "SELECT invoice_data FROM payment_transactions WHERE id = $1", paymentTxID).Scan(&raw); err != nil || len(raw) == 0 {
+		_ = sp.Rollback(ctx)
+		return
+	}
+	var inv map[string]any
+	if json.Unmarshal(raw, &inv) != nil || inv == nil {
+		_ = sp.Rollback(ctx)
+		return
+	}
+	if name, _ := inv["company_name"].(string); strings.TrimSpace(name) == "" {
+		_ = sp.Rollback(ctx)
+		return
+	}
+	po, _ := inv["po_number"].(string)
+	var poArg any
+	if strings.TrimSpace(po) != "" {
+		poArg = strings.TrimSpace(po)
+	}
+	number := "INV-" + time.Now().Format("200601") + "-" + strings.ToUpper(payShortID(paymentTxID, 8))
+	if _, err := sp.Exec(ctx, `
+		INSERT INTO invoices (id, brand_id, number, status, amount, issued_at, paid_at, notes, created_by, po_number, bill_to, payment_transaction_id)
+		VALUES ($1, $2, $3, 'paid', $4, NOW(), NOW(), $5, $6, $7, $8::jsonb, $9)
+		ON CONFLICT (payment_transaction_id) WHERE payment_transaction_id IS NOT NULL DO NOTHING`,
+		uuid.NewString(), brandID, number, amountIDR, "Top up saldo "+strconv.Itoa(tc)+" TC", userID, poArg, string(raw), paymentTxID); err != nil {
+		_ = sp.Rollback(ctx)
+		return
+	}
+	_ = sp.Commit(ctx)
 }
 
 func payShortID(v string, n int) string {

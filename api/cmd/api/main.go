@@ -356,6 +356,8 @@ func run() error {
 			authed.Get("/brands/{brandId}/credits/topup", brandFlowDeps.CreditsTopupLookup)
 			authed.Post("/brands/{brandId}/credits/topup", brandFlowDeps.CreditsTopupCreate)
 			authed.Post("/brands/{brandId}/link-monitor/request-replacement", brandFlowDeps.LinkMonitorRequestReplacement)
+			authed.Get("/brands/{brandId}/billing-profile", brandFlowDeps.BillingProfileGet)
+			authed.Put("/brands/{brandId}/billing-profile", brandFlowDeps.BillingProfilePut)
 			authed.Post("/brands/{brandId}/link-monitor/guarantee/choose", brandFlowDeps.LinkGuaranteeChoose)
 			authed.Post("/brands/{brandId}/link-monitor/check", brandFlowDeps.LinkMonitorCheckBrand)
 			authed.Get("/brands/{brandId}/reports/link-clicks", brandFlowDeps.ReportsLinkClicks)

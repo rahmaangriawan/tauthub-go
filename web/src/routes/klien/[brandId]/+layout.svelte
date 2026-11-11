@@ -154,6 +154,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 		if (hook) hook();
 	}
 
+	let topupProfile = $state<TopUpInvoiceData | null>(null);
+
 	async function openTopUp() {
 		topupPayment = null;
 		topupError = '';
@@ -168,6 +170,18 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			}
 		} catch {
 			// non-fatal: modal memakai fallback paket & kurs default
+		}
+		// Profil penagihan (hanya writer ke atas yang boleh membaca); gagal = kolom kosong.
+		try {
+			const pr = await apiRequest(`/v1/brands/${brandId}/billing-profile`);
+			if (pr.ok) {
+				const j = await pr.json();
+				if (j.profile) {
+					topupProfile = { company_name: j.profile.company_name, npwp: j.profile.npwp, npwp_address: j.profile.npwp_address, po_number: '' };
+				}
+			}
+		} catch {
+			// non-fatal
 		}
 	}
 
@@ -334,6 +348,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			busy={topupBusy}
 			error={topupError}
 			payment={topupPayment}
+			initialInvoice={topupProfile}
 			onSelectPackage={startTopUp}
 			onResetPayment={resetTopUpPayment}
 			onClose={closeTopUp}

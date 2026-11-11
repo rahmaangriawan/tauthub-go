@@ -13,6 +13,7 @@
 		busy = false,
 		error = '',
 		payment = null,
+		initialInvoice = null,
 		onSelectPackage,
 		onResetPayment,
 		onClose
@@ -22,6 +23,8 @@
 		busy?: boolean;
 		error?: string;
 		payment?: { payment_url: string | null; amount_idr: number; tc: number } | null;
+		// Profil penagihan brand: hanya mengisi kolom, tidak menyalakan faktur (faktur menambah PPN 11%).
+		initialInvoice?: TopUpInvoiceData | null;
 		onSelectPackage: (tc: number, invoice?: TopUpInvoiceData | null) => void;
 		onResetPayment: () => void;
 		onClose?: () => void;
@@ -47,7 +50,14 @@
 	let customError = $state('');
 	let selectedPreset = $state<number | null>(null);
 	let needInvoice = $state(false);
-	let invoice = $state<TopUpInvoiceData>({ company_name: '', npwp: '', npwp_address: '' });
+	let invoice = $state<TopUpInvoiceData>({ company_name: '', npwp: '', npwp_address: '', po_number: '' });
+	let prefilled = false;
+	$effect(() => {
+		if (initialInvoice && !prefilled) {
+			prefilled = true;
+			invoice = { ...invoice, ...initialInvoice, po_number: initialInvoice.po_number ?? '' };
+		}
+	});
 	let invoiceError = $state('');
 	let showCustomInput = $state(false);
 	let customInputEl = $state<HTMLInputElement | null>(null);
@@ -97,6 +107,11 @@
 		if (needInvoice) {
 			if (!invoice.company_name.trim() || !invoice.npwp.trim() || !invoice.npwp_address.trim()) {
 				invoiceError = 'Lengkapi Nama Perusahaan, Nomor NPWP, dan Alamat NPWP.';
+				return;
+			}
+			const npwpDigits = invoice.npwp.replace(/\D/g, '').length;
+			if (npwpDigits !== 15 && npwpDigits !== 16) {
+				invoiceError = 'NPWP harus 15 atau 16 digit.';
 				return;
 			}
 			invoiceError = '';
@@ -290,6 +305,8 @@
 							placeholder={tr("Jl. Contoh No. 123, Jakarta")}
 							bind:value={invoice.npwp_address}
 						></textarea>
+						<label class="tu-field-label" for="tu-inv-po">{tr("Nomor PO (opsional)")}</label>
+						<input id="tu-inv-po" class="tu-input" maxlength="60" bind:value={invoice.po_number} />
 						{#if invoiceError}<span class="tu-invalid">{invoiceError}</span>{/if}
 						<p class="tu-hint">{tr("Data faktur akan diteruskan ke tim Finance untuk penerbitan faktur pajak.")}</p>
 					</div>

@@ -6,7 +6,7 @@
 // sebelum menyerah (server mengembalikan transaksi yang sama).
 import { apiRequest, readApiError } from '$lib/auth';
 
-export type TopUpInvoiceData = { company_name: string; npwp: string; npwp_address: string };
+export type TopUpInvoiceData = { company_name: string; npwp: string; npwp_address: string; po_number?: string };
 export type TopUpResult = { payment_url: string | null; amount_idr: number; tc: number; status: string };
 
 export async function submitTopUp(

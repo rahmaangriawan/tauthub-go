@@ -1,19 +1,20 @@
 # Invoice dan Pajak
 
-> Menu Invoice & Pajak menampilkan daftar invoice (surat tagihan) yang dibuat tim Tauthub untuk brand Anda. Halaman ini hanya untuk melihat daftar. Faktur pajak atas Top Up Anda minta saat Top Up.
+> Menu Invoice & Pajak menampilkan daftar invoice (surat tagihan) brand Anda, tempat menyimpan data penagihan, dan tombol unduh PDF. Faktur pajak atas Top Up Anda minta saat Top Up.
 
 **Lokasi:** menu **KEUANGAN** › **Invoice & Pajak**
 **Untuk:** Klien (semua anggota brand yang bisa melihat brand tersebut)
 
 ## Gambaran singkat
 
-Invoice dibuat oleh tim Tauthub, bukan oleh Anda. Halaman ini hanya berisi daftar. Tidak ada tombol untuk membuat, mengunduh, atau mencetak invoice. Tidak ada juga formulir data pajak atau klaim PPh 23 di halaman ini.
+Ada dua asal invoice: invoice yang dibuat tim Tauthub untuk kampanye atau paket, dan invoice otomatis untuk Top Up yang Anda minta berfaktur (dibuat saat pembayaran berhasil, satu per pembayaran). Anda tidak membuat invoice sendiri. Di halaman ini Anda menyimpan data penagihan, melihat daftar, dan mengunduh PDF tiap invoice. Klaim PPh 23 belum ada di halaman ini.
 
 ## Yang tampil di layar
 
 - **Judul dan jumlah.** Judul **Invoice & Pajak** dengan keterangan "N invoice tercatat untuk brand ini."
 - **Filter status.** Kotak pilihan dengan isi **Semua status**, **Draf**, **Diterbitkan**, **Lunas**, dan **Dibatalkan**.
-- **Tabel invoice** dengan lima kolom:
+- **Data penagihan.** Kartu berisi nama perusahaan, nomor NPWP, alamat sesuai NPWP, dan email tagihan (opsional). Isi sekali, lalu form Top Up berfaktur terisi otomatis. Hanya anggota dengan peran writer ke atas yang melihatnya, dan hanya admin yang bisa menyimpan. NPWP harus 15 atau 16 digit (titik dan tanda hubung boleh dipakai); isian yang salah ditolak dengan pesan, tidak dibuang diam-diam.
+- **Tabel invoice** dengan kolom:
 
 | Kolom | Isinya |
 |---|---|
@@ -21,7 +22,9 @@ Invoice dibuat oleh tim Tauthub, bukan oleh Anda. Halaman ini hanya berisi dafta
 | **KAMPANYE** | Nama kampanye yang terkait. Tanda strip bila invoice tidak terkait kampanye |
 | **STATUS** | Status invoice |
 | **JUMLAH** | Nominal invoice dalam rupiah |
+| **NOMOR PO** | Nomor PO yang Anda isi saat Top Up berfaktur. Tanda strip bila tidak ada |
 | **JATUH TEMPO** | Tanggal batas bayar. Tanda strip bila belum ada |
+| **PDF** | Tombol unduh invoice dalam PDF: nomor, tanggal, status, data penagihan, PO, deskripsi, dan jumlah |
 
 Bila belum ada invoice, layar menulis "Belum ada invoice." dengan keterangan "Invoice diterbitkan admin setelah kampanye atau pembelian paket." Bila filter tidak menemukan apa pun, layar menulis "Tidak ada invoice dengan status ini."
 
@@ -48,10 +51,10 @@ Anda meminta faktur pajak atas Top Up dari jendela **Top Up Saldo**, bukan dari 
 
 1. Klik **Top Up Saldo**.
 2. Centang **Saya butuh Faktur Pajak (PPN 11%)**. Keterangannya: tagihan akan dibuat atas nama PT Tauthub dengan tambahan PPN 11%.
-3. Isi **Nama Perusahaan (Sesuai NPWP)**, **Nomor NPWP**, dan **Alamat NPWP**. Ketiganya wajib.
+3. Isi **Nama Perusahaan (Sesuai NPWP)**, **Nomor NPWP**, dan **Alamat NPWP**. Ketiganya wajib. Bila data penagihan sudah tersimpan, kolom terisi otomatis. **Nomor PO** boleh diisi.
 4. Lanjutkan Top Up seperti biasa.
 
-Data faktur diteruskan ke tim Finance, yang menerbitkan faktur pajak. Pastikan nama perusahaan tidak lebih dari 200 huruf, nomor NPWP tidak lebih dari 30 karakter, dan alamat tidak lebih dari 500 huruf. Isian yang melebihi batas dibuang tanpa pesan galat, sementara pembayaran tetap dibuat. PPN tidak menambah saldo. Langkah lengkap Top Up ada di [Saldo dan Top Up](08-saldo-dan-top-up.md).
+Data faktur diteruskan ke tim Finance, yang menerbitkan faktur pajak. Nomor NPWP harus 15 atau 16 digit, nama perusahaan paling banyak 200 huruf, alamat 500 huruf, dan nomor PO 60 karakter. Isian yang tidak memenuhi syarat ditolak dengan pesan, dan pembayaran tidak dibuat sampai diperbaiki. Setelah pembayaran berhasil, invoice otomatis muncul di daftar dengan data penagihan dan PO. PPN tidak menambah saldo. Langkah lengkap Top Up ada di [Saldo dan Top Up](08-saldo-dan-top-up.md).
 
 ## Klaim PPh 23
 

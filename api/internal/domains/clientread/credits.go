@@ -344,7 +344,7 @@ func (d *Deps) Invoices(w http.ResponseWriter, r *http.Request) {
 	args = append(args, limit, offset)
 	rowsQ, err := d.Pool.Query(r.Context(), `
 		SELECT i.id, i.campaign_id, i.number, i.status, i.amount, i.issued_at, i.due_at, i.paid_at,
-		       i.notes, i.created_at, i.updated_at, c.name
+		       i.notes, i.created_at, i.updated_at, c.name, i.po_number, i.bill_to
 		FROM invoices i LEFT JOIN campaigns c ON c.id = i.campaign_id
 		`+clause+`
 		ORDER BY i.created_at DESC
@@ -362,14 +362,16 @@ func (d *Deps) Invoices(w http.ResponseWriter, r *http.Request) {
 		var issuedAt, dueAt, paidAt *time.Time
 		var notes *string
 		var createdAt, updatedAt time.Time
-		var campaignName *string
+		var campaignName, poNumber *string
+		var billTo map[string]any
 		if rowsQ.Scan(&id, &campaignID, &number, &invStatus, &amount, &issuedAt, &dueAt, &paidAt,
-			&notes, &createdAt, &updatedAt, &campaignName) == nil {
+			&notes, &createdAt, &updatedAt, &campaignName, &poNumber, &billTo) == nil {
 			invoices = append(invoices, map[string]any{
 				"id": id, "campaign_id": campaignID, "campaign_name": campaignName,
 				"number": number, "status": invStatus, "amount": amount,
 				"issued_at": tsOrNil(issuedAt), "due_at": tsOrNil(dueAt), "paid_at": tsOrNil(paidAt),
 				"notes": notes, "created_at": isoMilli(createdAt), "updated_at": isoMilli(updatedAt),
+				"po_number": poNumber, "bill_to": billTo,
 			})
 		}
 	}
