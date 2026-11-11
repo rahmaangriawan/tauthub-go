@@ -37,7 +37,7 @@ Terakhir diperbarui: 8 November 2026.
 | [Profiler dan Taut Brief](klien/04-profiler-dan-taut-brief/README.md) | Menyusun panduan tentang brand Anda agar AI menulis sesuai gaya Anda |
 | [Status Publikasi](klien/05-status-publikasi.md) | Memantau tiap artikel yang Anda kirim ke media |
 | [Link Guardian](klien/06-link-guardian.md) | Memantau artikel yang sudah terbit dan tautannya |
-| [Analisis Kinerja dan Audit Publikasi](klien/07-analisis-dan-audit.md) | Klik per kampanye (Analisis Kinerja); Audit Publikasi akan datang |
+| [Analisis Kinerja dan Audit Publikasi](klien/07-analisis-dan-audit.md) | Fitur yang akan datang |
 | [Saldo dan Top Up](klien/08-saldo-dan-top-up.md) | Saldo, cara mengisinya, dan riwayat pemakaiannya |
 | [Invoice dan Pajak](klien/09-invoice-dan-pajak.md) | Daftar invoice (tagihan resmi) brand Anda |
 | [Profil dan Akun](klien/10-profil-dan-akun.md) | Data akun, pengaturan notifikasi, dan keamanan |
