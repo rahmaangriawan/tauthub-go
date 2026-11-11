@@ -81,6 +81,7 @@ Tombol ini menandai semua notifikasi Anda sebagai sudah dibaca, di kedua jenis.
 | **Artikel dialihkan ke media pengganti** | Artikel dipindah sendiri ke media lain setelah artikel di media sebelumnya tidak bisa dibuka | Daftar **Status Publikasi** |
 | **Pesan baru dari** diikuti nama media | Mitra mengirim pesan di ruang obrolan | Percakapan di menu **Pesan** |
 | **Saldo kampanye masih kosong** | Pengingat saldo. Lihat [Saldo dan Top Up](08-saldo-dan-top-up.md) | Menu **Saldo** |
+| **Saldo mulai menipis** | Saldo brand lebih rendah dari kebiasaan pemesanan Anda. Pengingat dikirim paling sering sebulan sekali. Isi lewat [Saldo dan Top Up](08-saldo-dan-top-up.md) | Menu **Saldo** |
 | **Pengumuman** diikuti judul | Siaran dari tim Tauthub | Halaman Notifikasi, tab **Pengumuman** |
 
 Daftar ini berisi jenis notifikasi yang biasa diterima Klien. Penjelasan status publikasi ada di [Status Publikasi](05-status-publikasi.md), dan pemantauan tautan ada di [Link Guardian](06-link-guardian.md).

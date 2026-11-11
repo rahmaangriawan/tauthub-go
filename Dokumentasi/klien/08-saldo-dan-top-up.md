@@ -107,6 +107,12 @@ Bila alamat halaman tidak membawa nomor transaksi, layar menulis "Transaction ID
 
 Pada baris kelompok kampanye, angka di kanan adalah total biaya terpakai untuk kampanye itu. Tulisan "ditahan" menunjukkan uang yang masih disisihkan. Pada kelompok **Lainnya**, angka adalah selisih bersihnya: hijau bila bertambah, merah bila berkurang. Untuk klaim garansi tayang, lihat [Link Guardian](06-link-guardian.md).
 
+## Bonus dan kode promo
+
+Sebagian paket top up memberi bonus saldo. Paket yang berbonus ditandai "Bonus" di daftar paket. Bonus masuk ke saldo bersamaan dengan pembayaran yang lunas.
+
+Punya kode promo? Di jendela Top Up, pilih **Punya kode promo?**, isi kodenya, lalu klik **Pakai**. Bonus tampil di ringkasan tagihan sebelum Anda membayar. Penjelasan lengkap ada di [Bonus Top Up](16-bonus-top-up.md).
+
 ## Aturan dan batasan
 
 - Untuk Top Up, hak akses Anda di brand harus penulis atau lebih tinggi. Akun dengan hak lebih rendah bisa melihat saldo dan melaporkan top up gagal. Namun, Top Up mereka ditolak dengan pesan "Brand not found". Bila Anda tidak yakin dengan hak akses Anda, tanyakan kepada pemilik brand.

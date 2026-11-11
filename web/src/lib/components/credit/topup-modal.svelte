@@ -240,7 +240,7 @@
 								aria-hidden="true"
 							/>
 							<span class="tu-preset-price">{fmtIDR(pkg.idr)}</span>
-							{#if pkg.bonus_tc}<span class="tu-bonus">+{pkg.bonus_tc} TC bonus</span>{/if}
+							{#if pkg.bonus_tc}<span class="tu-bonus">Bonus {fmtIDR(pkg.bonus_tc)}</span>{/if}
 						</button>
 					{/each}
 					<button
@@ -357,7 +357,7 @@
 							<input class="tu-input" placeholder={tr("Kode promo")} maxlength="40" bind:value={promoInput} disabled={promoBusy || busy} />
 							<button type="button" class="tu-btn-secondary" disabled={promoBusy || busy || !promoInput.trim()} onclick={applyPromo}>{tr("Pakai")}</button>
 						</div>
-						{#if promoApplied}<span class="tu-hint">{promoApplied.code}: +{promoApplied.bonus_tc} TC bonus</span>{/if}
+						{#if promoApplied}<span class="tu-hint">{promoApplied.code}: bonus {fmtIDR(promoApplied.bonus_tc)}</span>{/if}
 						{#if promoError}<span class="tu-invalid">{promoError}</span>{/if}
 					{/if}
 				</div>
@@ -368,7 +368,7 @@
 					<span class="tu-label">{tr("Ringkasan Tagihan")}</span>
 					<div class="tu-row"><span>{tr("Subtotal")}</span><span>{fmtIDR(subtotal)}</span></div>
 					<div class="tu-row"><span>PPN 11%</span><span>{fmtIDR(ppn)}</span></div>
-					{#if totalBonus > 0}<div class="tu-row"><span>{tr("Bonus saldo")}</span><span>+{totalBonus} TC</span></div>{/if}
+					{#if totalBonus > 0}<div class="tu-row"><span>{tr("Bonus saldo")}</span><span>+{fmtIDR(totalBonus)}</span></div>{/if}
 					<div class="tu-divider"></div>
 					<div class="tu-row tu-row-total"><span>{tr("Total Pembayaran")}</span><span>{fmtIDR(total)}</span></div>
 					<p class="tu-hint">{tr("Belum termasuk biaya gateway")}</p>

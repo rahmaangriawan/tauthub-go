@@ -45,7 +45,7 @@ func (d *Deps) checkPromo(ctx context.Context, brandID, code string, tc int) (in
 		return 0, "Kuota kode promo sudah habis."
 	}
 	if tc < row.intOr("min_topup_tc", 1) {
-		return 0, "Kode promo ini berlaku untuk top up minimal " + strconv.Itoa(row.intOr("min_topup_tc", 1)) + " TC."
+		return 0, "Nominal top up belum memenuhi syarat kode promo ini."
 	}
 	return row.intOr("bonus_tc", 0), ""
 }

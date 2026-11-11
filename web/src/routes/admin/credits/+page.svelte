@@ -224,9 +224,9 @@
 			<form class="mt-3 flex flex-wrap items-end gap-3" onsubmit={createPromo}>
 				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Kode</span>
 					<input class="app-input !w-[160px]" required maxlength="40" bind:value={promoForm.code} /></label>
-				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Bonus (TC)</span>
+				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Bonus (Rp)</span>
 					<input class="app-input !w-[110px]" type="number" min="1" required bind:value={promoForm.bonus_tc} /></label>
-				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Minimal top up (TC)</span>
+				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Minimal top up (Rp)</span>
 					<input class="app-input !w-[140px]" type="number" min="1" bind:value={promoForm.min_topup_tc} /></label>
 				<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">Batas pakai</span>
 					<input class="app-input !w-[110px]" type="number" min="1" placeholder="tanpa batas" bind:value={promoForm.max_uses} /></label>
