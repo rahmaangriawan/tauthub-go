@@ -20,6 +20,7 @@
 		user_id: string; email: string; display_name: string; is_active: boolean;
 		role: AdminRole; permissions: Record<string, boolean>; created_at: string;
 		wa_number?: string; wa_consent?: boolean;
+		telegram_user_id?: number | null;
 	};
 
 	const PERMISSION_KEYS = [
@@ -152,6 +153,36 @@
 	}
 
 	const denied = $derived(Boolean(!loading && rows.length === 0 && error.includes('Akses platform')));
+
+	// Edit Telegram ID untuk bot Persetujuan MCP. Dipakai saat admin menekan
+	// tombol Setujui di Telegram — bot memetakan from.id ke baris admin ini.
+	async function editTelegramId(admin: AdminRow) {
+		const current = admin.telegram_user_id ? String(admin.telegram_user_id) : '';
+		const raw = window.prompt(
+			`Telegram User ID untuk ${admin.email}.\n` +
+				`Cari lewat bot @userinfobot di Telegram.\n` +
+				`Kosongkan lalu OK untuk menghapus kaitan.`,
+			current
+		);
+		if (raw === null) return;
+		const trimmed = raw.trim();
+		if (trimmed && !/^\d+$/.test(trimmed)) {
+			error = 'Telegram ID harus angka bulat.';
+			return;
+		}
+		const payload: Record<string, unknown> = { telegram_user_id: trimmed === '' ? null : trimmed };
+		busy = true;
+		const res = await apiRequest(`/v1/platform/admins/${admin.user_id}`, {
+			method: 'PATCH',
+			body: JSON.stringify(payload)
+		});
+		busy = false;
+		if (!res.ok) {
+			error = await platformError(res);
+			return;
+		}
+		await load();
+	}
 </script>
 
 <section>
@@ -175,6 +206,7 @@
 						<th class="px-4 py-2.5 font-medium">Role</th>
 						<th class="px-4 py-2.5 font-medium">Hak Akses</th>
 						<th class="px-4 py-2.5 font-medium">WhatsApp</th>
+						<th class="px-4 py-2.5 font-medium">Telegram</th>
 						<th class="px-4 py-2.5 font-medium">{tr("Dibuat")}</th>
 						<th class="px-4 py-2.5"></th>
 					</tr>
@@ -213,6 +245,20 @@
 								{:else}
 									<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={() => openWa(admin)}><MessageCircle size={14} />{tr('Tambahkan nomor WA')}</button>
 								{/if}
+							</td>
+							<td class="px-4 py-2.5 text-xs">
+								{#if admin.telegram_user_id}
+									<span class="font-mono">{admin.telegram_user_id}</span>
+								{:else}
+									<span class="text-muted-foreground">—</span>
+								{/if}
+								<button
+									class="text-xs underline"
+									style="color: var(--primary); display: block; margin-top: 2px;"
+									type="button"
+									onclick={() => editTelegramId(admin)}
+									disabled={busy}
+								>Ubah</button>
 							</td>
 							<td class="px-4 py-2.5 text-xs text-muted-foreground">{fmtDate(admin.created_at)}</td>
 							<td class="px-4 py-2.5">

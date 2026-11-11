@@ -293,13 +293,29 @@ func (d *Deps) notifyBrandMembers(ctx context.Context, brandID, notifType, title
 	}
 }
 
-// notifyPlatformAdmins: parity notifyPlatformAdmins (best-effort).
+// notifyPlatformAdmins: parity notifyPlatformAdmins (best-effort). Setelah
+// insert, pg_notify('agent_events', …) sehingga MCP bot Telegram bisa
+// menerima event proaktif tanpa harus polling notifications.
 func (d *Deps) notifyPlatformAdmins(ctx context.Context, notifType, title, body string, link *string) {
 	if err := d.exec(ctx,
 		`INSERT INTO notifications (id, user_id, type, title, body, link)
 		 SELECT gen_random_uuid(), id, $1, $2, $3, $4 FROM users WHERE role = 'admin' AND is_active = TRUE`,
 		notifType, title, body, link); err != nil {
 		slog.Warn("[brandflow] notifikasi admin gagal", "type", notifType, "err", err)
+	}
+	linkStr := ""
+	if link != nil {
+		linkStr = *link
+	}
+	buf, err := json.Marshal(map[string]any{
+		"type": notifType, "title": title, "body": body, "link": linkStr,
+	})
+	if err != nil {
+		slog.Warn("[brandflow] pg_notify agent_events encode gagal", "err", err)
+		return
+	}
+	if _, err := d.Pool.Exec(ctx, "SELECT pg_notify('agent_events', $1)", string(buf)); err != nil {
+		slog.Warn("[brandflow] pg_notify agent_events gagal", "err", err)
 	}
 }
 

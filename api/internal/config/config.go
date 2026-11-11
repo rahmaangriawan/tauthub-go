@@ -73,6 +73,15 @@ type Config struct {
 	// server diblokir WAF mitra. Kosong → fallback memakai koneksi langsung.
 	CrawlEgressURL   string
 	CrawlEgressToken string
+
+	// MCP admin (Hermes Agent + Claude Code). Lihat plans/ini-aku-baru-ngide-
+	// gentle-bunny.md. Secret (service key, bot token, allowlist, kill switch,
+	// batas penyesuaian saldo) TIDAK lagi di .env — disimpan terenkripsi di
+	// tabel mcp_config dan dibaca via internal/mcpconfig. Yang tersisa di env
+	// hanya topologi:
+	MCPPort        string // port bind cmd/mcp
+	MCPPublicURL   string // URL publik (opsional, hanya untuk link di pesan)
+	APIInternalURL string // alamat loopback cmd/api yang dipanggil cmd/mcp
 }
 
 func Load() (*Config, error) {
@@ -152,6 +161,14 @@ func Load() (*Config, error) {
 	if c.PushWorkers < 1 || c.PushWorkers > 128 {
 		return nil, fmt.Errorf("PUSH_WORKERS harus 1..128 (dapat %d)", c.PushWorkers)
 	}
+
+	// ---- MCP admin ----
+	// Hanya topologi deployment yang di-env. Secret (service key, bot token,
+	// chat allowlist, kill switch, batas) disimpan terenkripsi di tabel
+	// mcp_config dan di-manage lewat halaman /admin/konfigurasi/mcp.
+	c.MCPPort = getEnv("MCP_PORT", "8090")
+	c.MCPPublicURL = strings.TrimRight(os.Getenv("MCP_PUBLIC_URL"), "/")
+	c.APIInternalURL = strings.TrimRight(getEnv("API_INTERNAL_URL", "http://127.0.0.1:"+c.Port), "/")
 
 	if len(c.Secret) < 32 {
 		return nil, fmt.Errorf("APP_SECRET wajib >= 32 karakter (dapat %d)", len(c.Secret))

@@ -227,10 +227,44 @@ func (d *Deps) SuperAdminOnly(next http.Handler) http.Handler {
 }
 
 // audit: catat audit_logs (best-effort; kegagalan tidak menggagalkan aksi).
+// Bila request datang via jalur MCP, detail diisi {"via":"agent",...} supaya
+// pengguna dashboard tahu aksi berasal dari agent, bukan klik admin biasa.
 func (d *Deps) audit(ctx context.Context, actorUserID, action, targetType, targetID string) {
+	d.auditWith(ctx, actorUserID, action, targetType, targetID, nil)
+}
+
+// auditWith: varian audit yang menerima detail tambahan. Marker agent dari
+// context otomatis digabung dengan extra (keys agent-* tidak boleh ditimpa).
+func (d *Deps) auditWith(ctx context.Context, actorUserID, action, targetType, targetID string, extra map[string]any) {
+	detail := map[string]any{}
+	for k, v := range extra {
+		detail[k] = v
+	}
+	if agent := httpx.AgentFromCtx(ctx); agent != nil {
+		detail["via"] = "agent"
+		if agent.ClientID != "" {
+			detail["agent_client_id"] = agent.ClientID
+		}
+		if agent.ActionID != "" {
+			detail["agent_action_id"] = agent.ActionID
+		}
+		if agent.ActionCode != "" {
+			detail["agent_action_code"] = agent.ActionCode
+		}
+	}
+	var detailArg any
+	if len(detail) > 0 {
+		raw, err := json.Marshal(detail)
+		if err != nil {
+			slog.Warn("[platform] audit detail marshal gagal", "action", action, "err", err)
+			detailArg = nil
+		} else {
+			detailArg = string(raw)
+		}
+	}
 	if err := d.exec(ctx,
-		"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id) VALUES (gen_random_uuid(), $1, $2, $3, $4)",
-		nullIfEmpty(actorUserID), action, targetType, targetID); err != nil {
+		"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id, detail) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)",
+		nullIfEmpty(actorUserID), action, targetType, targetID, detailArg); err != nil {
 		slog.Warn("[platform] audit gagal", "action", action, "err", err)
 	}
 }
@@ -264,13 +298,17 @@ func (d *Deps) execRows(ctx context.Context, sql string, args ...any) (int64, er
 	return tag.RowsAffected(), nil
 }
 
-// notifyPlatformAdmins: parity notifyPlatformAdmins di app lama.
+// notifyPlatformAdmins: parity notifyPlatformAdmins di app lama. Setelah
+// insert sukses, kirim sinyal pg_notify('agent_events', …) supaya listener
+// MCP (cmd/mcp) bisa meneruskan event tertentu ke bot Telegram sebagai
+// notifikasi proaktif. Payload format: {type, title, body, link}.
 func (d *Deps) notifyPlatformAdmins(ctx context.Context, notifType, title, body string, link *string) {
 	if err := d.exec(ctx,
 		"INSERT INTO notifications (id, user_id, type, title, body, link) SELECT gen_random_uuid(), id, $1, $2, $3, $4 FROM users WHERE role = 'admin' AND is_active = TRUE",
 		notifType, title, body, link); err != nil {
 		slog.Warn("[platform] notify admins gagal", "type", notifType, "err", err)
 	}
+	notifyAgentEvent(ctx, d.Pool, notifType, title, body, link)
 }
 
 // ---------- query rows → map (kolom dinamis) ----------

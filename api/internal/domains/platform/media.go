@@ -560,11 +560,9 @@ func mpSameDomain(a, b string) bool {
 var mpSlugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 func writeAuditBestEffort(d *Deps, ctx context.Context, actor, action, targetType, targetID string) {
-	if err := d.exec(ctx,
-		"INSERT INTO audit_logs (id, actor_user_id, action, target_type, target_id) VALUES (gen_random_uuid(), $1, $2, $3, $4)",
-		nullIfEmpty(actor), action, targetType, targetID); err != nil {
-		d.logWarn("audit gagal", action, err)
-	}
+	// Delegasi ke auditWith supaya marker agent (Hermes / Claude Code via MCP)
+	// ikut terekam di audit_logs.detail.
+	d.auditWith(ctx, actor, action, targetType, targetID, nil)
 }
 
 func mpIntArgDefault(body map[string]any, key string, def int) int {
@@ -1035,14 +1033,24 @@ func (d *Deps) MediaReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Media aktif dengan perubahan yang diparkir mitra: keputusan hanya berlaku
-	// untuk perubahan itu, status media (tayang) tidak berubah.
+	// untuk perubahan itu, status media (tayang) tidak berubah. Di luar itu,
+	// aksi review hanya sah dari status pending_review — mencegah
+	// re-approval ganda (dulu handler ini tidak mengecek status saat ini, jadi
+	// panggilan ulang bisa mengirim notifikasi dua kali dan menimpa
+	// rejection_reason yang sudah dicatat).
+	curStatus := ""
 	if cur, _ := d.queryRow(r.Context(),
 		"SELECT status, pending_values::text AS pv FROM media WHERE id = $1 LIMIT 1", mediaID); cur != nil {
 		curRow := ptRow(ptNormalizeMap(cur))
-		if pv := strings.TrimSpace(curRow.strOr("pv", "")); curRow.strOr("status", "") == "active" && pv != "" {
+		curStatus = curRow.strOr("status", "")
+		if pv := strings.TrimSpace(curRow.strOr("pv", "")); curStatus == "active" && pv != "" {
 			d.mediaParkedChangesReview(w, r, user.ID, media, decision, reason, pv)
 			return
 		}
+	}
+	if curStatus != "pending_review" {
+		writeErr(w, d, errConflict("Media tidak sedang menunggu review (status saat ini: "+curStatus+")."))
+		return
 	}
 
 	nextStatus := "rejected"

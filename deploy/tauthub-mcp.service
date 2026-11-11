@@ -1,0 +1,22 @@
+[Unit]
+Description=Tauthub MCP admin server (Go)
+After=network-online.target tauthub-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tauthub
+Group=tauthub
+WorkingDirectory=__APP_DIR__/api
+EnvironmentFile=__APP_DIR__/.env
+# Jejak memori jauh lebih kecil dari cmd/api (tidak ada router besar, tidak ada
+# job runner, hanya proxy HTTP ke 127.0.0.1:8080). 128 MiB cukup.
+Environment=GOMEMLIMIT=128MiB
+ExecStart=__APP_DIR__/api/bin/mcp
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

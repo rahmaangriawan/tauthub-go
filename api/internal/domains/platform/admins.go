@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -21,7 +22,7 @@ import (
 // Helper di berkas ini diberi awalan `adm` supaya tidak bentrok dengan helper
 // modul platform lain yang berbagi package.
 
-const admListSQL = `SELECT pa.user_id, pa.role, pa.permissions, pa.created_at,
+const admListSQL = `SELECT pa.user_id, pa.role, pa.permissions, pa.created_at, pa.telegram_user_id,
        u.email, u.display_name, u.is_active,
        np.wa_number, COALESCE(np.wa_consent, false) AS wa_consent
 FROM platform_admins pa
@@ -41,16 +42,32 @@ func admAdminJSON(row rowMap) map[string]any {
 	if permissions == nil {
 		permissions = map[string]any{}
 	}
+	// telegram_user_id adalah BIGINT nullable; row.numOr() mengembalikan 0 untuk
+	// NULL, jadi kita cek sendiri supaya UI bisa membedakan "belum di-set".
+	var tgID any
+	if raw, ok := row["telegram_user_id"]; ok && raw != nil {
+		switch v := raw.(type) {
+		case int64:
+			if v != 0 {
+				tgID = v
+			}
+		case float64:
+			if v != 0 {
+				tgID = int64(v)
+			}
+		}
+	}
 	return map[string]any{
-		"user_id":      row.strOr("user_id", ""),
-		"role":         row.strOr("role", "admin"),
-		"permissions":  permissions,
-		"created_at":   row.timePtr("created_at"),
-		"email":        row.strOr("email", ""),
-		"display_name": row.strOr("display_name", ""),
-		"is_active":    row.boolOr("is_active", false),
-		"wa_number":    row.strOr("wa_number", ""),
-		"wa_consent":   row.boolOr("wa_consent", false),
+		"user_id":          row.strOr("user_id", ""),
+		"role":             row.strOr("role", "admin"),
+		"permissions":      permissions,
+		"created_at":       row.timePtr("created_at"),
+		"email":            row.strOr("email", ""),
+		"display_name":     row.strOr("display_name", ""),
+		"is_active":        row.boolOr("is_active", false),
+		"wa_number":        row.strOr("wa_number", ""),
+		"wa_consent":       row.boolOr("wa_consent", false),
+		"telegram_user_id": tgID,
 	}
 }
 
@@ -217,6 +234,42 @@ func admValidateUpdate(body map[string]any) (string, bool, map[string]any, bool,
 		permissions, hasPerms = obj, true
 	}
 	return role, hasRole, permissions, hasPerms, ""
+}
+
+// admValidateTelegramID: parse body["telegram_user_id"]. Mengembalikan
+//
+//	set  bool  : apakah field ada di body
+//	val  int64 : 0 = permintaan hapus kaitan (atau null); non-0 = pasang
+//	zodMsg     : pesan error validasi; kosong = ok
+//
+// Dipakai AdminsUpdate untuk memberi admin kemampuan memetakan akun Telegram
+// ke profil admin yang bersangkutan.
+func admValidateTelegramID(body map[string]any) (bool, int64, string) {
+	raw, present := body["telegram_user_id"]
+	if !present {
+		return false, 0, ""
+	}
+	if raw == nil {
+		return true, 0, ""
+	}
+	switch v := raw.(type) {
+	case float64:
+		if v != float64(int64(v)) {
+			return true, 0, "Invalid input: expected integer, received number"
+		}
+		return true, int64(v), ""
+	case string:
+		// UI biasanya kirim sebagai string; Telegram ID bisa > 2^31.
+		if v == "" {
+			return true, 0, ""
+		}
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return true, 0, "Invalid input: expected integer-encoded string"
+		}
+		return true, n, ""
+	}
+	return true, 0, "Invalid input: expected integer or null"
 }
 
 // admPermissionIssue: pertama nilai non-boolean di record permissions → pesan
@@ -421,6 +474,24 @@ func (d *Deps) AdminsUpdate(w http.ResponseWriter, r *http.Request) {
 			"UPDATE platform_admins SET permissions = $1::jsonb WHERE user_id = $2",
 			ptJSONString(merged), adminID); err != nil {
 			writeErr(w, d, admGenericError)
+			return
+		}
+	}
+	// telegram_user_id: nilai 0 (atau null eksplisit) → kolom dikosongkan,
+	// supaya admin bisa memutus kaitan akun Telegram tanpa menghapus baris.
+	if tgSet, tgVal, zMsg := admValidateTelegramID(body); zMsg != "" {
+		writeErr(w, d, errUnprocessable(zMsg))
+		return
+	} else if tgSet {
+		var arg any
+		if tgVal != 0 {
+			arg = tgVal
+		}
+		if err := d.exec(r.Context(),
+			"UPDATE platform_admins SET telegram_user_id = $1 WHERE user_id = $2",
+			arg, adminID); err != nil {
+			// Kemungkinan konflik unique (ID yang sama sudah dipakai admin lain).
+			writeErr(w, d, errConflict("Telegram ID sudah dipakai admin lain."))
 			return
 		}
 	}

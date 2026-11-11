@@ -408,6 +408,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 						? [
 								{ label: i18n.t.nav_admin.audit_log, href: '/admin/audit-log', icon: ClipboardList, active: pathname.startsWith('/admin/audit-log') },
 								{ label: i18n.t.nav_admin.bug_reports, href: '/admin/bug-reports', icon: Bug, active: pathname.startsWith('/admin/bug-reports') },
+								{ label: 'Aksi Agent', href: '/admin/agent-actions', icon: ClipboardList, active: pathname.startsWith('/admin/agent-actions') },
+								{ label: 'Konfigurasi MCP', href: '/admin/konfigurasi/mcp', icon: ShieldCheck, active: pathname.startsWith('/admin/konfigurasi/mcp') },
 								{ label: i18n.t.nav_admin.operations, href: '/admin/operations', icon: Gauge, active: pathname.startsWith('/admin/operations') }
 							]
 						: [])

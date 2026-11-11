@@ -37,6 +37,7 @@ import (
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobs"
 	"github.com/rahmaangriawan/tauthub-go/internal/jobwire"
+	"github.com/rahmaangriawan/tauthub-go/internal/mcpconfig"
 )
 
 func main() {
@@ -58,6 +59,17 @@ func run() error {
 	}
 	defer database.Close()
 	slog.Info("db terhubung", "host", cfg.DBHost, "name", cfg.DBName)
+
+	// Konfigurasi MCP admin tersimpan terenkripsi di tabel mcp_config dan
+	// dibaca lewat *mcpconfig.Store. Authenticator mendapat getter yang
+	// mengambil service key terbaru per request supaya rotasi berlaku tanpa
+	// restart.
+	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	mcpStore, err := mcpconfig.New(bootCtx, database.Pool, cfg.Secret, cfg.CmsEncryptionSecret)
+	bootCancel()
+	if err != nil {
+		return err
+	}
 
 	// Google service dipakai bersama auth (alur publik) dan platform (diagnostik
 	// config admin) supaya statusnya konsisten.
@@ -81,9 +93,10 @@ func run() error {
 			CmsEncryptionSecret:   cfg.CmsEncryptionSecret,
 		},
 		Auth: &httpx.Authenticator{
-			Pool:   database.Pool,
-			Secret: cfg.Secret,
-			Issuer: cfg.AppName,
+			Pool:               database.Pool,
+			Secret:             cfg.Secret,
+			Issuer:             cfg.AppName,
+			ServiceKeyProvider: mcpStore.ServiceKey,
 		},
 		Google: googleSvc,
 	}
@@ -685,6 +698,16 @@ func run() error {
 			authed.Put("/platform/admins/{adminId}/wa-number", platformDeps.AdminsWANumber)
 			authed.Delete("/platform/admins/{adminId}", platformDeps.AdminsDelete)
 
+			// Aksi yang diusulkan agent MCP (Hermes / Claude Code). Hanya baca —
+			// persetujuan dilakukan di bot Telegram, bukan lewat endpoint ini.
+			authed.Get("/platform/agent-actions", platformDeps.AgentActionsList)
+			authed.Get("/platform/agent-actions/{id}", platformDeps.AgentActionGet)
+
+			// Konfigurasi MCP admin (service key, bot Telegram, allowlist, kill
+			// switch tulis). Super Admin only karena menyentuh secret.
+			authed.With(platformDeps.SuperAdminOnly).Get("/platform/mcp-config", platformDeps.McpConfigGet)
+			authed.With(platformDeps.SuperAdminOnly).Put("/platform/mcp-config", platformDeps.McpConfigPut)
+
 			// Riwayat notifikasi admin (per user admin yang login).
 			authed.Get("/platform/notifications", platformDeps.AdminNotifications)
 			authed.Post("/platform/notifications", platformDeps.AdminNotifications)
@@ -1111,6 +1134,12 @@ func run() error {
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+
+	// Dengarkan pg_notify('mcp_config_changed') supaya rotasi service key di
+	// admin UI langsung berlaku di proses API ini.
+	listenCtx, listenCancel := context.WithCancel(context.Background())
+	defer listenCancel()
+	go mcpStore.ListenForChanges(listenCtx)
 
 	go func() {
 		slog.Info("api listening", "port", cfg.Port, "env", cfg.AppEnv)
