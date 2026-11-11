@@ -1175,9 +1175,26 @@
 				maxWidth="workspace"
 				onClose={() => (depositsOpen = false)}
 			>
-				<p class="finLead">
-					{tr("Semua brand yang masih punya saldo, dari yang terbesar. Titipan nyata ditopang topup asli lewat gateway; penyesuaian adalah sisanya (manual atau bonus); reserved terkunci untuk order berjalan.")}
-				</p>
+				<div class="finExplain">
+					<h3 class="finExplainTitle">{tr("Dana titipan itu apa?")}</h3>
+					<p>
+						{tr("Bayangkan klien menitipkan uang di warung kita. Pak Budi titip Rp 100.000. Selama belum dipakai belanja, uang itu masih milik Pak Budi, bukan milik kita. Kita hanya memegangnya, jadi tidak boleh dipakai untuk keperluan sendiri.")}
+					</p>
+					<ol class="finSteps">
+						<li>
+							<strong>{tr("Klien top up")}</strong>
+							<span>{tr("Uangnya masuk ke rekening kita dan tercatat sebagai saldo klien.")}</span>
+						</li>
+						<li>
+							<strong>{tr("Saldo belum dipakai")}</strong>
+							<span>{tr("Inilah dana titipan. Milik klien, dan wajib tetap ada di rekening.")}</span>
+						</li>
+						<li>
+							<strong>{tr("Klien memesan artikel")}</strong>
+							<span>{tr("Saldo berkurang. Uang yang terpakai baru menjadi hak mitra dan profit kita.")}</span>
+						</li>
+					</ol>
+				</div>
 				{#if depositsLoading && depositsEntries === null}
 					<p class="mt-5 text-sm text-muted-foreground">{tr("Memuat rincian…")}</p>
 				{:else if depositsError}
@@ -1190,32 +1207,38 @@
 					{@const sumRes = depositsEntries.reduce((a, r) => a + r.reserved_tc, 0)}
 					<div class="finStats mt-5">
 						<div class="finStat">
-							<span class="finStatLabel">{tr("Brand bersaldo")}</span>
+							<span class="finStatLabel">{tr("Klien yang punya saldo")}</span>
 							<span class="finStatValue">{fmtNum(depositsEntries.length)}</span>
 						</div>
 						<div class="finStat finStatKey">
-							<span class="finStatLabel">{tr("Titipan nyata")}</span>
+							<span class="finStatLabel">{tr("Dana titipan")}</span>
 							<span class="finStatValue">{rp(sumReal)}</span>
 						</div>
 						<div class="finStat">
-							<span class="finStatLabel">{tr("Penyesuaian")}</span>
+							<span class="finStatLabel">{tr("Saldo dari admin")}</span>
 							<span class="finStatValue">{rp(sumAdj)}</span>
 						</div>
 						<div class="finStat">
-							<span class="finStatLabel">{tr("Reserved")}</span>
+							<span class="finStatLabel">{tr("Lagi dikunci")}</span>
 							<span class="finStatValue">{rp(sumRes)}</span>
 						</div>
 					</div>
+					<dl class="finGlossary">
+						<div><dt>{tr("Pernah top up")}</dt><dd>{tr("Total uang yang pernah dimasukkan klien lewat gateway.")}</dd></div>
+						<div><dt>{tr("Dana titipan")}</dt><dd>{tr("Sisa uang klien yang belum dipakai. Ini yang wajib kita jaga.")}</dd></div>
+						<div><dt>{tr("Dari admin")}</dt><dd>{tr("Saldo hadiah atau koreksi dari admin, bukan uang yang dimasukkan klien. Tidak dihitung sebagai uang yang wajib ada.")}</dd></div>
+						<div><dt>{tr("Lagi dikunci")}</dt><dd>{tr("Saldo yang disisihkan untuk pesanan yang belum selesai.")}</dd></div>
+					</dl>
 					<div class="finTableWrap mt-4">
 						<table class="finTable" style="min-width: 980px;">
 							<thead>
 								<tr class="text-left">
 									<th>{tr("Brand")}</th>
 									<th>{tr("Klien / pemilik")}</th>
-									<th class="num">{tr("Topup asli")}</th>
-									<th class="num">{tr("Titipan nyata")}</th>
-									<th class="num">{tr("Penyesuaian")}</th>
-									<th class="num">{tr("Reserved")}</th>
+									<th class="num">{tr("Pernah top up")}</th>
+									<th class="num">{tr("Dana titipan")}</th>
+									<th class="num">{tr("Dari admin")}</th>
+									<th class="num">{tr("Lagi dikunci")}</th>
 									<th class="num">{tr("Total saldo")}</th>
 									<th class="num">{tr("Terakhir aktif")}</th>
 								</tr>
@@ -2059,5 +2082,80 @@
 		.finTable tbody tr {
 			transition: none;
 		}
+	}
+
+	/* Kotak penjelasan bahasa sederhana di modal dana titipan. */
+	.finExplain {
+		margin-top: 16px;
+		padding: 16px 18px;
+		border-radius: 10px;
+		background: var(--accent);
+		color: var(--foreground);
+	}
+	.finExplainTitle {
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.finExplain p {
+		margin-top: 6px;
+		max-width: 72ch;
+		font-size: 13px;
+		line-height: 1.65;
+	}
+	.finSteps {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+		gap: 12px;
+		margin-top: 14px;
+		counter-reset: step;
+		list-style: none;
+	}
+	.finSteps li {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding-left: 32px;
+		font-size: 12.5px;
+		line-height: 1.55;
+		counter-increment: step;
+	}
+	.finSteps li::before {
+		content: counter(step);
+		position: absolute;
+		left: 0;
+		top: 0;
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 999px;
+		background: var(--card);
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--accent-foreground);
+	}
+	.finSteps strong {
+		font-weight: 600;
+	}
+	.finSteps span {
+		color: var(--muted-foreground);
+	}
+	.finGlossary {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		gap: 10px 24px;
+		margin-top: 16px;
+	}
+	.finGlossary dt {
+		font-size: 12.5px;
+		font-weight: 600;
+		color: var(--foreground);
+	}
+	.finGlossary dd {
+		margin-top: 1px;
+		font-size: 12px;
+		line-height: 1.55;
+		color: var(--muted-foreground);
 	}
 </style>
