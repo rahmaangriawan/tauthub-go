@@ -784,12 +784,12 @@
 									<p class="font-medium">{tr("Tentang Penarikan Dana")}</p>
 									<p class="mt-1 text-muted-foreground">
 										{tr("Biaya transfer ditanggung mitra:")}
-										<strong>{tr("Bank")} {bankFeeIdr != null ? `Rp ${bankFeeIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}` : '-'}</strong>
+										<strong>{tr("Bank")} {bankFeeIdr != null ? `${bankFeeIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}` : '-'}</strong>
 										{tr("atau")}
 										<strong>{tr("E-Wallet")} {ewalletFeePct != null ? `${String(ewalletFeePct).replace('.', ',')}%` : '-'}</strong>
 										{tr("dari nominal. Penarikan dapat diajukan melalui menu")} <strong>{tr("Penghasilan")}</strong>.
 										{tr("Saldo minimal penarikan")}
-										<strong>{minimumWithdrawIdr != null ? `Rp ${minimumWithdrawIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}` : '-'}</strong>.
+										<strong>{minimumWithdrawIdr != null ? `${minimumWithdrawIdr.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}` : '-'}</strong>.
 									</p>
 								</div>
 							</div>

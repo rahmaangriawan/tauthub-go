@@ -80,7 +80,7 @@
 		void load();
 	}
 
-	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+	const rp = (n: number) => `${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—');
 	const statusLabel: Record<string, string> = $derived({
 		pending: tr('Menunggu review'),

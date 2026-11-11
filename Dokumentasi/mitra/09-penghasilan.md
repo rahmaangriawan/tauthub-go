@@ -114,7 +114,7 @@ Lihat [Publikasi](03-publikasi/README.md) dan [Daftar Media](04-daftar-media/REA
 
 - **Potongan platform 25%.** Platform adalah Tauthub sebagai tempat semua ini berjalan. Anda menerima 75% dari nilai bagian Anda. Persentase ini tetap, dan juga tertulis di **Daftar Media** dan **Publikasi**.
 - **Nilai Diterima sudah bersih.** Nominal di kolom **Nilai Diterima**, di kartu saldo, dan di **Publikasi Terbaru** pada **Ringkasan** sudah dikurangi potongan.
-- **Contoh.** Kalau **Harga diajukan** Rp100.000, **Potongan platform (25%)** adalah Rp25.000 dan **Pendapatan Anda** Rp75.000.
+- **Contoh.** Kalau **Harga diajukan** 100.000, **Potongan platform (25%)** adalah 25.000 dan **Pendapatan Anda** 75.000.
 - **Hanya untuk penghasilan dari artikel.** Potongan 25% tidak berlaku untuk komisi referral dan fee VIP.
 - **Perkiraan bisa sedikit berbeda.** Angka akhir adalah **Nilai Diterima** setelah artikel terbit. Perkiraan yang tampil sebelumnya, misalnya di **Daftar Media**, bisa sedikit berbeda. Sebabnya aturan bagi hasil yang berlaku untuk media Anda.
 
@@ -122,7 +122,7 @@ Lihat [Publikasi](03-publikasi/README.md) dan [Daftar Media](04-daftar-media/REA
 
 - Penghasilan tercatat otomatis saat artikel berstatus **Terbit**. Anda tidak perlu mengajukan apa pun.
 - Satu publikasi dicatat satu kali. Kalau artikel dikirim ulang setelah revisi, penghasilan tidak bertambah.
-- Publikasi bernilai Rp0 tidak menghasilkan penghasilan.
+- Publikasi bernilai 0 tidak menghasilkan penghasilan.
 - Masa tunggu 2 hari (48 jam) dihitung sejak penghasilan tercatat. Setelah itu status berubah menjadi **Siap ditarik** tanpa tindakan dari Anda.
 
 > **Catatan:** Anda mungkin menerbitkan artikel sendiri lalu mengirim alamatnya lewat **Kirim URL Artikel** di **Publikasi**. Setelah itu, pastikan penghasilannya muncul di **Riwayat Penghasilan**. Kalau tidak muncul, buat tiket di [Dukungan](12-dukungan.md) dan sertakan kode pesanan artikel.
@@ -144,9 +144,9 @@ Lihat [Publikasi](03-publikasi/README.md) dan [Daftar Media](04-daftar-media/REA
 | "Data rekening atau e-wallet belum diisi." dengan tombol **Buka Profil** | Tujuan transfer belum ada, jadi **Tarik Saldo** nonaktif | Klik **Buka Profil** (membuka **Konfigurasi**) dan isi tab **Withdraw** |
 | "Gagal memuat penghasilan." | Data tidak berhasil dimuat | Muat ulang halaman |
 | "Masukkan nominal penarikan." | Nominal di **Tarik sebagian** masih kosong | Ketik nominal |
-| "Minimal penarikan Rp...." | Nominal di bawah batas minimum | Naikkan nominal |
-| "Nominal melebihi saldo siap ditarik (Rp...)." | Nominal lebih besar dari saldo | Turunkan nominal atau pilih **Tarik seluruh saldo** |
-| "Minimal saldo untuk penarikan Rp...." | Saldo belum mencapai batas minimum | Tunggu saldo bertambah |
+| "Minimal penarikan ...." | Nominal di bawah batas minimum | Naikkan nominal |
+| "Nominal melebihi saldo siap ditarik (...)." | Nominal lebih besar dari saldo | Turunkan nominal atau pilih **Tarik seluruh saldo** |
+| "Minimal saldo untuk penarikan ...." | Saldo belum mencapai batas minimum | Tunggu saldo bertambah |
 | "Saldo tidak dapat ditutup dengan earning utuh — pilih nominal lain." | Nominal sebagian tidak bisa dipenuhi dari penghasilan yang ada | Pilih nominal lain atau **Tarik seluruh saldo** |
 | "Permintaan gagal." | Pengajuan tidak berhasil diproses | Coba lagi. Kalau terulang, buat tiket di [Dukungan](12-dukungan.md) |
 

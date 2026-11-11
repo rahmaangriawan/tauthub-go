@@ -122,6 +122,18 @@ func bsIntlIDR(v float64) string {
 	return sign + "Rp\u00a0" + bsGroupID(rounded)
 }
 
+// bsNumberID: nominal berpemisah titik tanpa kata "Rp", untuk teks yang tampil
+// ke klien dan mitra.
+func bsNumberID(v float64) string {
+	neg := v < 0
+	sign := ""
+	if neg {
+		sign = "-"
+		v = -v
+	}
+	return sign + bsGroupID(int64(math.Floor(v+0.5)))
+}
+
 // bsIntlCompact: parity formatCompact — Intl notation compact, 1 desimal
 // ("1 rb", "1,5 jt", "2 M"). Pembulatan 1 desimal bisa membawa mantissa ke
 // 1000 (999.950 → "1 jt"), jadi unit dinaikkan bila itu terjadi.

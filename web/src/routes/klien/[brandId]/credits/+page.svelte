@@ -10,7 +10,7 @@
 	import { apiRequest, ensureValidSession, readApiError, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TopUpModal from '$lib/components/credit/topup-modal.svelte';
 	import { submitTopUp, type TopUpInvoiceData } from '$lib/credits/topup-client';
-	import { tcToRp } from '$lib/credits/rupiah';
+	import { tcToNominal } from '$lib/credits/rupiah';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -318,7 +318,7 @@
 	// ==================================================================================
 	function ledgerRow(e: LedgerEntry, fallbackRate: number): LedgerRow {
 		const rate = e.rate_idr && e.rate_idr > 0 ? e.rate_idr : fallbackRate;
-		const amount = tcToRp(Math.abs(e.amount_tc), rate);
+		const amount = tcToNominal(Math.abs(e.amount_tc), rate);
 		const title = e.document_title?.trim() || null;
 		const label = ledgerLabel(e);
 		if (e.ref_type === 'reserve') return { tone: 'hold', sign: '', amount, label, title };
@@ -372,7 +372,7 @@
 							: `${pendingTopups.length} ${tr("tagihan top up menunggu pembayaran")}`}
 					</p>
 					<p class="bal-meta">
-						{tr("Total tagihan menunggu pembayaran")} Rp {fmt(pendingTotalIdr)} · {tr("belum masuk saldo sampai pembayaran selesai")}
+						{tr("Total tagihan menunggu pembayaran")} {fmt(pendingTotalIdr)} · {tr("belum masuk saldo sampai pembayaran selesai")}
 					</p>
 				</div>
 				{#if latestPending?.payment_url}
@@ -387,9 +387,9 @@
 					<p class="bal-label">{tr("Saldo tersedia")}</p>
 					<Wallet size={18} strokeWidth={1.5} />
 				</div>
-				<p class="bal-figure bal-figure-lead"><span class="bal-cur">Rp</span>{fmt(data.wallet.available_tc * rateIdr)}</p>
+				<p class="bal-figure bal-figure-lead">{fmt(data.wallet.available_tc * rateIdr)}</p>
 				{#if pendingTotalIdr > 0}
-					<p class="bal-lead-note">+ Rp {fmt(pendingTotalIdr)} {tr("menunggu pembayaran")}</p>
+					<p class="bal-lead-note">+{fmt(pendingTotalIdr)} {tr("menunggu pembayaran")}</p>
 				{/if}
 				{#if split.total > 0}
 					<div class="bal-split" role="img" aria-label="{tr('Tersedia')} {Math.round(split.available)}%, {tr('Tertahan')} {Math.round(split.reserved)}%, {tr('Terpakai')} {Math.round(split.captured)}%">
@@ -408,14 +408,14 @@
 				<span class="bal-icon bal-icon-hold"><Lock size={18} strokeWidth={1.5} /></span>
 				<div>
 					<p class="bal-label">{tr("Tertahan")}</p>
-					<p class="bal-figure"><span class="bal-cur">Rp</span>{fmt(data.wallet.reserved_tc * rateIdr)}</p>
+					<p class="bal-figure">{fmt(data.wallet.reserved_tc * rateIdr)}</p>
 				</div>
 			</div>
 			<div class="app-card bal-stat bal-stat-side">
 				<span class="bal-icon bal-icon-used"><Coins size={18} strokeWidth={1.5} /></span>
 				<div>
 					<p class="bal-label">{tr("Total terpakai")}</p>
-					<p class="bal-figure"><span class="bal-cur">Rp</span>{fmt(data.wallet.captured_tc * rateIdr)}</p>
+					<p class="bal-figure">{fmt(data.wallet.captured_tc * rateIdr)}</p>
 				</div>
 			</div>
 		</div>
@@ -436,7 +436,7 @@
 						<span class="bal-row-title">{tr("menunggu pembayaran")} · {pendingTopups.length} {tr("tagihan")}</span>
 						<span class="bal-meta">{tr("belum masuk saldo sampai pembayaran selesai")}</span>
 					</span>
-					<span class="bal-amt">+Rp {fmt(pendingTotalIdr)}</span>
+					<span class="bal-amt">+{fmt(pendingTotalIdr)}</span>
 				</div>
 			{/if}
 
@@ -471,14 +471,14 @@
 								<span class="bal-row-side">
 									{#if g.campaign_id}
 										<span class="bal-amt" class:bal-amt-out={g.spent_tc > 0} class:bal-amt-muted={g.spent_tc <= 0}>
-											{g.spent_tc > 0 ? `−${tcToRp(g.spent_tc, rateIdr)}` : tcToRp(0, rateIdr)}
+											{g.spent_tc > 0 ? `−${tcToNominal(g.spent_tc, rateIdr)}` : tcToNominal(0, rateIdr)}
 										</span>
 										{#if g.held_tc > 0}
-											<span class="bal-meta">{tcToRp(g.held_tc, rateIdr)} {tr("ditahan")}</span>
+											<span class="bal-meta">{tcToNominal(g.held_tc, rateIdr)} {tr("ditahan")}</span>
 										{/if}
 									{:else}
 										<span class="bal-amt" class:bal-amt-in={g.net_tc > 0} class:bal-amt-out={g.net_tc < 0} class:bal-amt-muted={g.net_tc === 0}>
-											{g.net_tc > 0 ? '+' : g.net_tc < 0 ? '−' : ''}{tcToRp(Math.abs(g.net_tc), rateIdr)}
+											{g.net_tc > 0 ? '+' : g.net_tc < 0 ? '−' : ''}{tcToNominal(Math.abs(g.net_tc), rateIdr)}
 										</span>
 									{/if}
 								</span>
@@ -647,14 +647,13 @@
 	.bal-stat-side { flex-direction: row; align-items: center; gap: 16px; }
 	.bal-figure { font-size: 28px; line-height: 36px; font-weight: 500; font-variant-numeric: tabular-nums; }
 	.bal-figure-lead { font-size: 40px; line-height: 48px; }
-	.bal-cur { margin-right: 6px; font-size: 14px; font-weight: 400; color: var(--muted-foreground); }
 
 	.bal-stat-lead {
 		justify-content: space-between; gap: 8px; padding: 24px; color: #fff; border-color: transparent;
 		background: linear-gradient(155deg, #3b77f2 0%, #2b67ec 45%, #1d4fc7 100%);
 		box-shadow: 0 8px 24px rgba(43, 103, 236, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 	}
-	.bal-stat-lead .bal-label, .bal-stat-lead .bal-cur { color: rgba(255, 255, 255, 0.78); }
+	.bal-stat-lead .bal-label { color: rgba(255, 255, 255, 0.78); }
 	.bal-lead-top { display: flex; align-items: center; justify-content: space-between; color: rgba(255, 255, 255, 0.78); }
 	.bal-lead-note { font-size: 13px; line-height: 20px; color: rgba(255, 255, 255, 0.85); }
 	.bal-split { display: flex; height: 8px; margin-top: 16px; overflow: hidden; border-radius: 9999px; background: rgba(255, 255, 255, 0.16); }

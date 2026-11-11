@@ -15,7 +15,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import ProfilerSections from './_sections.svelte';
-	import { tcToRp } from '$lib/credits/rupiah';
+	import { tcToNominal } from '$lib/credits/rupiah';
 	import { emptyDraft, draftFromResponse, validateProfilerDraft } from '../../_shared';
 	import type { ProfilerDraft } from '../../_shared';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -286,7 +286,7 @@
 		// Batas bawah server untuk Mode Efisien adalah 5.000 kredit — dicegah di sini
 		// supaya klien tidak menabrak 422 setelah menunggu.
 		if (budget?.mode === 'efficient' && budget.amount > 0 && budget.amount < 5000)
-			return `${tr('Anggaran minimum belum terpenuhi. Isi minimal')} ${tcToRp(5000, rateIdr)}.`;
+			return `${tr('Anggaran minimum belum terpenuhi. Isi minimal')} ${tcToNominal(5000, rateIdr)}.`;
 		if (budget?.mode === 'efficient' && budget.amount > walletAvailable)
 			return tr('Saldo tidak mencukupi. Top Up dulu sebelum menjalankan analisis.');
 		return null;
@@ -327,7 +327,7 @@
 		</div>
 		<div class="flex flex-col items-end gap-1">
 			<div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium" title={tr('Saldo Anda')}>
-				{tcToRp(walletAvailable, rateIdr)} </div>
+				{tcToNominal(walletAvailable, rateIdr)} </div>
 			<div class="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
 				<span class="h-2 w-2 rounded-full" style="background-color: var(--success);"></span>{saveLabel}
 			</div>

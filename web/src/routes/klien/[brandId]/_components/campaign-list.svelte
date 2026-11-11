@@ -15,7 +15,7 @@
 	import ProfilerGateModal from '$lib/components/profiler-gate-modal.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
 	import { STAGE_LABEL, STAGE_TONE, STATUS_OPTIONS } from '../taut-pintar/_shared';
-	import { tcToRp } from '$lib/credits/rupiah';
+	import { tcToNominal } from '$lib/credits/rupiah';
 
 	const brandId = $derived(page.params.brandId as string);
 	const i18n = $derived(getI18n());
@@ -428,7 +428,7 @@ let revoking = $state(false);
 					<div class="cmp-stats">
 						<div>
 							<p class="cmp-stat-label">Anggaran terserap</p>
-							<p class="cmp-stat-value">{tcToRp(c.stats.tc_used, rateIdr)}</p>
+							<p class="cmp-stat-value">{tcToNominal(c.stats.tc_used, rateIdr)}</p>
 						</div>
 						<div>
 							<p class="cmp-stat-label">Progres media</p>
@@ -530,7 +530,7 @@ let revoking = $state(false);
 				</div>
 				<div>
 					<span class="shareStatsLabel">Terpakai</span>
-					<span class="shareStatsValue">{tcToRp(shareFor.stats.tc_used ?? 0, rateIdr)}</span>
+					<span class="shareStatsValue">{tcToNominal(shareFor.stats.tc_used ?? 0, rateIdr)}</span>
 				</div>
 			</div>
 

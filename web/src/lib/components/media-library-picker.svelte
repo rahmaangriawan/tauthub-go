@@ -10,7 +10,7 @@
 		import { Check, CircleAlert, Image as ImageIcon, Info, LoaderCircle, Sparkles, Trash2, Upload, X } from '@lucide/svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import { tr } from '$lib/i18n/phrases';
-	import { tcToRp } from '$lib/credits/rupiah';
+	import { tcToNominal } from '$lib/credits/rupiah';
 
 	type LibraryImage = {
 		id: string;
@@ -62,9 +62,9 @@
 		let balance = $state<number | null>(null);
 		let rateIdr = $state(0);
 		// Biaya & saldo tampil dalam rupiah memakai kurs aktif dari server.
-		const costRp = $derived(cost > 0 ? tcToRp(cost, rateIdr) : tr('Gratis'));
-		const balanceRp = $derived(balance == null ? '—' : tcToRp(balance, rateIdr));
-		const remainingRp = $derived(balance == null ? '—' : tcToRp(Math.max(0, balance - cost), rateIdr));
+		const costRp = $derived(cost > 0 ? tcToNominal(cost, rateIdr) : tr('Gratis'));
+		const balanceRp = $derived(balance == null ? '—' : tcToNominal(balance, rateIdr));
+		const remainingRp = $derived(balance == null ? '—' : tcToNominal(Math.max(0, balance - cost), rateIdr));
 		let prompt = $state('');
 		let generating = $state(false);
 		let confirmOpen = $state(false);

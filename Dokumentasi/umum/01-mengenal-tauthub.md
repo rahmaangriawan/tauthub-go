@@ -48,7 +48,7 @@ Berikut alur umum dari pemesanan sampai penghasilan dibayar. Rincian tiap langka
 7. **Tautan dipantau.** **Link Guardian** memeriksa secara berkala apakah artikel masih tayang dan tautan di dalamnya masih utuh. Klien memantau statusnya di **Status Publikasi**. Klien juga bisa membagikan **Berita Acara** kampanye lewat tautan yang bisa dibuka tanpa masuk.
 8. **Mitra menerima penghasilan.** Penghasilan tercatat setelah artikel terbit, dengan status **Masa tunggu**. Setelah masa tunggu 2×24 jam, penghasilan menjadi **Siap ditarik**. Mitra mengajukan penarikan lewat **Tarik Saldo**. Tim Tauthub memeriksanya. Invoice pengajuan, yaitu bukti tagihan resmi, tampil di menu **Invoice**.
 
-> **Penting:** Saldo punya tiga keadaan. Saldo ditahan saat pesanan dikirim. Saldo terpakai setelah publikasi berhasil. Saldo kembali ke brand kalau pesanan ditolak atau dibatalkan. Saldo brand akan hangus kalau selama 12 bulan tidak ada transaksi saldo maupun publikasi. Hangus berarti saldo hilang dan tidak bisa dikembalikan. Jadi, lakukan transaksi atau publikasi sebelum batas itu.
+> **Penting:** Saldo punya tiga keadaan. Saldo ditahan saat pesanan dikirim. Saldo terpakai setelah publikasi berhasil. Saldo kembali ke brand kalau pesanan ditolak atau dibatalkan. Saldo brand tidak punya masa berlaku dan tidak hangus, berapa lama pun belum dipakai.
 
 > **Catatan:** Tauthub menghitung batas 3×24 jam sejak jadwal terbit. Kalau pesanan tidak dijadwalkan, batas dihitung sejak pesanan dibuat. Biaya, tarif, dan persentase bagi hasil bisa berubah. Jadi, ikuti selalu angka yang tampil di layar Anda.
 

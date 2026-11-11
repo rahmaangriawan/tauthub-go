@@ -35,7 +35,7 @@ Tombol di banner mengikuti tahap kampanye:
 
 ### Kartu ringkasan
 
-**Biaya Distribusi Media** ("Total biaya untuk distribusi ke seluruh media terpilih.") menampilkan jumlah rupiah. Angka ini menjumlahkan harga artikel yang belum punya publikasi aktif. Sebelum artikel dikirim, angkanya sama dengan total harga media pilihan. Setelah artikel dikirim, artikel itu tidak dihitung lagi. Jadi angkanya turun dan bisa menjadi Rp0. Pada putaran baru, hanya artikel putaran baru yang dihitung. Rincian saldo ada di menu **Saldo**.
+**Biaya Distribusi Media** ("Total biaya untuk distribusi ke seluruh media terpilih.") menampilkan jumlah rupiah. Angka ini menjumlahkan harga artikel yang belum punya publikasi aktif. Sebelum artikel dikirim, angkanya sama dengan total harga media pilihan. Setelah artikel dikirim, artikel itu tidak dihitung lagi. Jadi angkanya turun dan bisa menjadi 0. Pada putaran baru, hanya artikel putaran baru yang dihitung. Rincian saldo ada di menu **Saldo**.
 
 **Status Kampanye** ("Progres penerbitan artikel ke media terpilih.") menampilkan jumlah artikel yang terbit, misalnya **2 / 3 Terbit**, beserta bilah dan persen kemajuan. Satu baris keterangan di bawahnya berbunyi "Belum didistribusikan. Terbitkan dari halaman The Writer.", "N media menunggu persetujuan mitra", atau "Semua media terbit". Hitungannya mencakup semua artikel di daftar, dari semua putaran. Artikel yang dibatalkan atau ditolak mitra tetap dihitung belum terbit.
 
@@ -165,7 +165,7 @@ Setiap kali Anda menyimpan, artikel itu diperiksa lagi mutunya. Penjelasannya ad
 
 ## Pertanyaan yang sering diajukan
 
-**Mengapa Biaya Distribusi Media menunjukkan Rp0?**
+**Mengapa Biaya Distribusi Media menunjukkan 0?**
 Kartu hanya menghitung artikel yang belum punya publikasi aktif. Setelah artikel dikirim, semuanya sudah punya publikasi, jadi angkanya turun.
 
 **Mengapa tombol Hubungi Media abu-abu?**

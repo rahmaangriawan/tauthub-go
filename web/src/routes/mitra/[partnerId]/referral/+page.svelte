@@ -80,7 +80,7 @@
 		}
 	}
 
-	const idr = (n: number) => 'Rp' + Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' });
+	const idr = (n: number) => Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' });
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '-');
 
 	const ratePct = $derived(((data?.rate_bps ?? 100) / 100).toFixed(1));
@@ -133,7 +133,7 @@
 				</div>
 				<p class="mt-1 text-sm text-muted-foreground">
 					{vip?.tier === 'vip_reguler'
-						? tr('Fee affiliate Rp10.000/domain untuk 1000 domain pertama, lalu Rp5.000/domain.')
+						? tr('Fee affiliate 10.000/domain untuk 1000 domain pertama, lalu 5.000/domain.')
 						: tr('Akses Client Workspace & AI premium aktif.')}
 				</p>
 			</div>

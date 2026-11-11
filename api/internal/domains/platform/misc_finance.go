@@ -1963,7 +1963,7 @@ func (d *Deps) settNotifyPartner(ctx context.Context, settlement ptRow, to, reje
 	if partnerID == "" {
 		return
 	}
-	amount := "Rp " + finFormatThousands(int64(settlement.numOr("total_amount")))
+	amount := finFormatThousands(int64(settlement.numOr("total_amount")))
 	partner, err := d.queryRow(ctx,
 		"SELECT user_id, public_id, (SELECT email FROM users WHERE id = user_id) AS email FROM partners WHERE id = $1 LIMIT 1", partnerID)
 	if err != nil || partner == nil {
@@ -2668,7 +2668,7 @@ func (d *Deps) finCreditCPAForDomain(ctx context.Context, referredDomainID strin
 		if userID != "" {
 			refLink := "/mitra/" + publicID + "/referral"
 			d.finNotifyUser(ctx, userID, "referral.cpa.credited",
-				"CPA Rp "+finFormatThousands(int64(cpaAmount))+" dikreditkan",
+				"CPA "+finFormatThousands(int64(cpaAmount))+" dikreditkan",
 				"Domain "+rd.strOr("domain_name", "")+" approved.",
 				refLink, "referral:cpa:"+referredDomainID)
 			notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
@@ -2679,7 +2679,7 @@ func (d *Deps) finCreditCPAForDomain(ctx context.Context, referredDomainID strin
 				Data: map[string]string{
 					"nama":   partner.strOr("name", ""),
 					"judul":  rd.strOr("domain_name", ""),
-					"jumlah": "Rp " + finFormatThousands(int64(cpaAmount)),
+					"jumlah": finFormatThousands(int64(cpaAmount)),
 				},
 				Link:    refLink,
 				BaseURL: notify.BaseURL(),

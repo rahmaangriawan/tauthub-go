@@ -50,7 +50,7 @@ Teks di bawah judul bagian berbunyi: "Harga dan kesepakatan untuk kerja sama pub
 
 ### Harga Pengajuan (IDR)
 
-Anda wajib mengisi kotak ini dengan angka lebih dari 0. Ketik angkanya saja, misalnya `50000`. Kotak menambahkan titik pemisah ribuan sendiri dan membuang huruf atau tanda baca. Harga paling tinggi Rp1.000.000.000. Kalau lebih, penyimpanan ditolak dengan pesan "Invalid price".
+Anda wajib mengisi kotak ini dengan angka lebih dari 0. Ketik angkanya saja, misalnya `50000`. Kotak menambahkan titik pemisah ribuan sendiri dan membuang huruf atau tanda baca. Harga paling tinggi 1.000.000.000. Kalau lebih, penyimpanan ditolak dengan pesan "Invalid price".
 
 Kalau kotak kosong atau 0, pesan merah muncul di bawahnya: "Harga wajib diisi. Media tanpa harga tidak akan tampil di katalog klien dan tidak bisa dipesan." Tombol simpan juga tidak bisa diklik.
 

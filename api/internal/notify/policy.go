@@ -119,10 +119,6 @@ var policies = map[string]ChannelPolicy{
 	// menyalakannya dari panel Template bila pembatalan perlu diberitahukan
 	// lewat email juga.
 	"publication.cancelled_by_admin": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
-	// Saldo akun pasif: peringatan H-7 dan pemberitahuan setelah hangus.
-	// Email immediate supaya klien punya kesempatan memakai saldo sebelum hangus.
-	"billing.balance_forfeit_warning": {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
-	"billing.balance_forfeited":       {InApp: true, Push: true, Email: ModeImmediate, WA: ModeOff, Tier: TierDeadline},
 
 	// --- Tier 3: informasi (in-app + push saja) -------------------------
 	"publication.published":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},

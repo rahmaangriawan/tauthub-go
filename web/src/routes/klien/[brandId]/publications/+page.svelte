@@ -247,7 +247,7 @@
 
 	/** Tampilan berbahasa rupiah: nilai rupiah ditampilkan apa adanya. */
 	function tcLabel(rupiah: number, _rate: number): string {
-		return `Rp ${Math.max(0, Math.round(Number(rupiah) || 0)).toLocaleString('id-ID')}`;
+		return `${Math.max(0, Math.round(Number(rupiah) || 0)).toLocaleString('id-ID')}`;
 	}
 
 	const fmtDate = (v: string | null) =>

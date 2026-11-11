@@ -145,7 +145,7 @@ Referral adalah ajakan: Anda mengajak domain lain bergabung, lalu Anda mendapat 
 | Withdrawal sedang diproses | Tim Tauthub sedang memproses penarikan Anda. |
 | Withdrawal dibayarkan | Penarikan Anda sudah dibayarkan. |
 | Withdrawal ditolak | Penarikan ditolak. Isinya memuat alasan, dan saldo dikembalikan. |
-| CPA Rp… dikreditkan | Imbalan referral untuk domain yang disetujui masuk ke penghasilan Anda. Jumlahnya tertulis di judul. |
+| CPA … dikreditkan | Imbalan referral untuk domain yang disetujui masuk ke penghasilan Anda. Jumlahnya tertulis di judul. |
 | Domain disetujui, Domain ditolak | Keputusan atas domain referral Anda. |
 | Notifikasi status VIP | Ucapan saat Anda menjadi VVIP atau VIP Reguler, atau kabar bahwa status VIP dimatikan. |
 

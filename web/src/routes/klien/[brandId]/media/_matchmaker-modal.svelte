@@ -265,12 +265,12 @@
 	const errText = (reason: unknown, fallback: string) =>
 		reason instanceof Error && reason.message ? reason.message : fallback;
 
-	const money = (n: number) => 'Rp' + Math.round(n || 0).toLocaleString('id-ID');
+	const money = (n: number) => Math.round(n || 0).toLocaleString('id-ID');
 	const moneyShort = (n: number) => {
-		if (!n) return 'Rp0';
-		if (n >= 1_000_000_000) return 'Rp' + (n / 1_000_000_000).toFixed(1).replace('.0', '') + ' M';
-		if (n >= 1_000_000) return 'Rp' + (n / 1_000_000).toFixed(1).replace('.0', '') + ' juta';
-		if (n >= 1_000) return 'Rp' + Math.round(n / 1_000) + ' rb';
+		if (!n) return '0';
+		if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace('.0', '') + ' M';
+		if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' juta';
+		if (n >= 1_000) return Math.round(n / 1_000) + ' rb';
 		return money(n);
 	};
 	const trafficFmt = (n: number) => {
@@ -503,12 +503,12 @@
 	const EXAMPLE_BRIEFS = [
 		`Kami UMKM katering sehat yang baru buka, mau memperkenalkan brand lewat publikasi artikel sederhana di beberapa media berita. Cukup 3 media dalam bahasa Indonesia dari kategori Berita atau Media Nasional.
 
-Total anggaran kami Rp900.000, dengan harga per media sekitar Rp250.000 - Rp350.000. Syaratnya tidak rumit: DA minimal 20, AI Trust minimal 60, dan estimasi trafik minimal 5.000 kunjungan per bulan.
+Total anggaran kami 900.000, dengan harga per media sekitar 250.000 - 350.000. Syaratnya tidak rumit: DA minimal 20, AI Trust minimal 60, dan estimasi trafik minimal 5.000 kunjungan per bulan.
 
 Setiap artikel minimal 500 kata dengan 1 backlink dofollow permanen. Hindari judul clickbait dan klaim yang berlebihan. Isinya perkenalan layanan katering sehat kami dan manfaat makan sehat setiap hari.`,
 		`Kami brand skincare pria Ravencare ingin meningkatkan brand awareness dan SEO lewat artikel rekomendasi dan perbandingan produk, menyasar pria usia 20-35 tahun yang tertarik perawatan wajah. Susunkan 10 media dalam bahasa Indonesia dari kategori Bisnis, Lifestyle, dan Media Nasional.
 
-Anggaran total kampanye Rp7.500.000. Harga per media yang kami inginkan Rp250.000 - Rp750.000. Pilih media dengan DA minimal 25, AI Trust minimal 70, dan estimasi trafik minimal 10.000 kunjungan per bulan.
+Anggaran total kampanye 7.500.000. Harga per media yang kami inginkan 250.000 - 750.000. Pilih media dengan DA minimal 25, AI Trust minimal 70, dan estimasi trafik minimal 10.000 kunjungan per bulan.
 
 Setiap artikel minimal 1.000 kata dan wajib mendapat 2 backlink dofollow permanen. Hindari klaim medis yang tidak terbukti, klaim memutihkan secara instan, dan judul yang menjanjikan hasil berlebihan.
 

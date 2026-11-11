@@ -16,7 +16,7 @@
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { MEDIA_LABEL, BUDGET_LABEL, STAGE_LABEL, fmtDateWib } from '../../_shared';
-	import { tcToRp } from '$lib/credits/rupiah';
+	import { tcToNominal } from '$lib/credits/rupiah';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -155,7 +155,7 @@
 				</div>
 				<div class="rounded-lg border p-3 text-center">
 					<p class="text-xs text-muted-foreground">Terpakai</p>
-					<p class="text-lg font-bold">{tcToRp(stats?.tc_used ?? 0, rateIdr)}</p>
+					<p class="text-lg font-bold">{tcToNominal(stats?.tc_used ?? 0, rateIdr)}</p>
 				</div>
 			</div>
 

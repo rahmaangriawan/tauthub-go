@@ -22,7 +22,7 @@
 	let result = $state<{ ok: boolean; message: string } | null>(null);
 
 	const idr = (n: number) =>
-		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(n);
+		new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }).format(n);
 
 	async function hmacSha256Hex(message: string, secret: string): Promise<string> {
 		const encoder = new TextEncoder();

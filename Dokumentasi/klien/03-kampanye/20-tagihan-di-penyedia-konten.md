@@ -21,7 +21,7 @@ Bila Anda menulis atau mengunggah artikel sendiri, Anda tidak membayar biaya pen
 
 Kotak ini ada di sisi kiri bar bawah. Angkanya adalah jumlah dari biaya media, penulisan AI, dan gambar AI. Untuk penulisan dan gambar, Tauthub menghitung jumlah proses yang sudah ditagih, lalu mengalikannya dengan tarif yang berlaku sekarang.
 
-Saat total berubah, sebuah label kecil melayang di atas angka lalu memudar. Label hijau seperti "+Rp…" berarti total naik, misalnya setelah artikel AI selesai ditulis. Label merah seperti "-Rp…" berarti total turun, misalnya setelah Anda melepas media dari kampanye. Label tidak muncul saat halaman baru dibuka.
+Saat total berubah, sebuah label kecil melayang di atas angka lalu memudar. Label hijau seperti "+…" berarti total naik, misalnya setelah artikel AI selesai ditulis. Label merah seperti "-…" berarti total turun, misalnya setelah Anda melepas media dari kampanye. Label tidak muncul saat halaman baru dibuka.
 
 ### Rincian biaya
 
@@ -73,7 +73,7 @@ Pesan berikut bisa muncul di tahap yang berbeda:
 | "Saldo kredit tidak cukup untuk generate (butuh …, tersedia …)" | Menulis atau menulis ulang artikel | Top up saldo, lalu ulangi |
 | "Saldo kredit tidak cukup untuk generate gambar…" | Membuat gambar AI | Top up saldo, lalu ulangi |
 | "Saldo tidak mencukupi untuk membuat gambar. Silakan top up terlebih dahulu." | Kotak konfirmasi gambar. Tombol konfirmasi tidak bisa diklik | Top up saldo, lalu buka kotak konfirmasi lagi |
-| **Saldo Tidak Cukup**: "Distribusi butuh Rp…, saldo tersedia Rp…" | Menerbitkan kampanye | Klik **Top Up Saldo**, lalu buka **Ringkasan** untuk melihat status penerbitan |
+| **Saldo Tidak Cukup**: "Distribusi butuh …, saldo tersedia …" | Menerbitkan kampanye | Klik **Top Up Saldo**, lalu buka **Ringkasan** untuk melihat status penerbitan |
 
 Dua pesan pertama memakai satuan kredit, bukan rupiah. Anda tidak perlu menghitungnya. Pesan itu hanya berarti saldo belum cukup. Saldo di halaman **Saldo** tampil dalam rupiah. Biaya yang ditahan untuk penerbitan diberi tanda "ditahan".
 

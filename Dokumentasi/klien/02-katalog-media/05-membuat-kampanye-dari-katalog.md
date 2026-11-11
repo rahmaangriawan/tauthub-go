@@ -20,7 +20,7 @@ Jendela **Simpan ke Kampanye** memuat bagian ini:
 | **Media terpilih** | Jumlah media. Klik barisnya untuk membuka atau menutup daftar media |
 | **Total biaya publikasi** | Jumlah harga semua media terpilih, dalam rupiah |
 | **Saldo kredit** | Saldo tersedia Anda dalam rupiah. Baris ini hanya ada bila saldo berhasil dimuat |
-| Kotak status saldo | **Cukup untuk pesanan ini**, atau **Saldo kurang Rp X untuk pesanan ini** |
+| Kotak status saldo | **Cukup untuk pesanan ini**, atau **Saldo kurang X untuk pesanan ini** |
 | **Nama Kampanye** (opsional) | Kolom nama, maksimal 120 karakter |
 | **Batal** dan **Buat Kampanye** | Tombol di bagian bawah |
 
@@ -57,7 +57,7 @@ Bila Anda mengosongkan kolom, Tauthub memberi nama otomatis **Kampanye Baru #N**
 
 ### Cara mengisi saldo bila kurang
 
-1. Lihat kotak **Saldo kurang Rp X untuk pesanan ini**.
+1. Lihat kotak **Saldo kurang X untuk pesanan ini**.
 2. Klik **Top Up dulu**. Jendela Top Up terbuka di halaman yang sama.
 3. Selesaikan Top Up. Langkahnya ada di [Saldo dan Top Up](../08-saldo-dan-top-up.md).
 4. Tutup jendela Top Up. Kotak status saldo berubah sendiri. Lalu klik **Buat Kampanye**.

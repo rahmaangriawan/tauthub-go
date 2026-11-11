@@ -40,7 +40,7 @@
 	let redirectIn = $state<number | null>(null);
 
 	const idr = (n: number) =>
-		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(n);
+		new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }).format(n);
 
 	onMount(() => {
 		let pollTimer: number | null = null;

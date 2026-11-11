@@ -119,7 +119,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	const saldoRate = $derived(
 		Number(overview.data?.wallet?.rate_idr ?? overview.data?.tc_config?.rate_idr) || 1000
 	);
-	const fmtIDRPill = (tc: number) => `Rp ${(tc * saldoRate).toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
+	const fmtIDRPill = (tc: number) => `${(tc * saldoRate).toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
 
 	// Top Up cepat dari utility bar (parity CreditPill app lama). Paket & kurs
 	// diambil dari GET /credits agar selalu ikut konfigurasi platform; modal

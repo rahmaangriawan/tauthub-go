@@ -75,7 +75,7 @@ Di HP:
 | **Status Verifikasi** | **Domain terverifikasi**, **Dewan Pers** | Hanya media dengan tanda verifikasi yang Anda centang |
 | **Secure Direct** | **Secure Direct** | Hanya media yang menayangkan artikel langsung, tanpa persetujuan manual dari Mitra |
 | **AI Citation** | **Dikutip AI Overview** | Hanya media yang terdeteksi dikutip atau dirujuk mesin AI |
-| **Rentang Harga** | **Rp Min** dan **Rp Maks** | Hanya media dengan harga dalam rentang itu |
+| **Rentang Harga** | **Harga min** dan **Harga maks** | Hanya media dengan harga dalam rentang itu |
 | **Minimum DA** | Penggeser 0 sampai 100 | Hanya media dengan DA (skor kekuatan situs di mesin pencari) sama dengan atau di atas angka pilihan Anda |
 
 Hal-hal yang perlu Anda tahu:

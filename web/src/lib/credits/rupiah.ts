@@ -20,6 +20,22 @@ const rpFmt = new Intl.NumberFormat('id-ID', {
 /** Format rupiah bertanda "Rp". */
 export const rp = (amount: number) => rpFmt.format(Math.round(amount || 0));
 
+const nominalFmt = new Intl.NumberFormat('id-ID', {
+	maximumFractionDigits: 0,
+	roundingMode: 'trunc'
+});
+
+/**
+ * Nominal tanpa kata "Rp". Dipakai di seluruh layar klien dan mitra: sisi
+ * pengguna hanya melihat angka, bukan mata uang, sehingga saldo dan harga tidak
+ * tampil sebagai uang tunai. Layar admin tetap memakai `rp`.
+ */
+export const nominal = (amount: number) => nominalFmt.format(Math.round(amount || 0));
+
+/** Kredit → nominal tanpa "Rp" memakai kurs aktif. */
+export const tcToNominal = (tc: number, rate?: number | null) =>
+	nominal((tc || 0) * tcRate(rate));
+
 /** Kredit → rupiah memakai kurs aktif. */
 export const tcToRp = (tc: number, rate?: number | null) => rp((tc || 0) * tcRate(rate));
 

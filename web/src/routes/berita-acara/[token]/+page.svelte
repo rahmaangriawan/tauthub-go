@@ -9,7 +9,7 @@
 	// (_backdrop-stage) — parity backdrop-stage.tsx app lama.
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { rp } from '$lib/credits/rupiah';
+	import { nominal } from '$lib/credits/rupiah';
 	import { getI18n } from '$lib/i18n/i18n.svelte';
 	import { sameOriginAssetUrl } from '$lib/media/cover';
 	import { Image as ImageIcon } from '@lucide/svelte';
@@ -173,7 +173,7 @@
 					</div>
 					<div>
 						<span class="docStatLabel">Saldo terpakai</span>
-						<span class="docStatValue">{rp(report.summary.tc_used)}</span>
+						<span class="docStatValue">{nominal(report.summary.tc_used)}</span>
 					</div>
 				</div>
 

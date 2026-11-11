@@ -694,7 +694,7 @@
 								{/if}
 							</div>
 						</td>
-						<td class="modernTd"><span class="priceBoldText">Rp {fmtIdr(m.client_price ?? m.price ?? 0)}</span></td>
+						<td class="modernTd"><span class="priceBoldText">{fmtIdr(m.client_price ?? m.price ?? 0)}</span></td>
 						<td class="modernTd" style="text-align:right" onclick={(e) => e.stopPropagation()}>
 							<button class="viewDetailBtn" type="button" onclick={(e) => { e.stopPropagation(); detail = m; }}>{tr('Detail')}</button>
 						</td>

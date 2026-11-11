@@ -88,7 +88,6 @@ Kata-kata di bawah ditulis sama dengan yang tampil di layar. Kalau satu hal puny
 | Tauthub Credit (TC) | Satuan kredit di balik Saldo. Sebagian pesan di layar menyebutnya TC. | [Saldo dan Top Up](../klien/08-saldo-dan-top-up.md) |
 | Top Up | Mengisi Saldo lewat penyedia pembayaran. Saldo hasil Top Up tidak bisa dikembalikan menjadi uang. | [Saldo dan Top Up](../klien/08-saldo-dan-top-up.md) |
 | Dana tertahan | Bagian Saldo yang disisihkan untuk pesanan yang masih berjalan. Dana ini kembali ke Saldo tersedia kalau pesanan dibatalkan atau ditolak. | [Saldo dan Top Up](../klien/08-saldo-dan-top-up.md) |
-| Saldo hangus | Saldo tersedia yang hilang kalau brand tidak punya transaksi saldo maupun publikasi selama 12 bulan. Hangus berarti hilang selamanya dan tidak bisa dikembalikan. | [Saldo dan Top Up](../klien/08-saldo-dan-top-up.md) |
 | Invoice & Pajak | Menu Klien yang berisi daftar invoice brand. Invoice adalah tagihan resmi. Anda meminta faktur pajak atas Top Up saat melakukan Top Up. | [Invoice dan Pajak](../klien/09-invoice-dan-pajak.md) |
 | Invoice (Mitra) | Arsip penarikan dana Mitra. Setiap pengajuan penarikan tercatat sebagai satu invoice. | [Invoice dan pencairan](../mitra/10-invoice-dan-pencairan.md) |
 | Penghasilan | Uang yang diterima Mitra dari artikel yang terbit di medianya, setelah potongan platform. | [Penghasilan](../mitra/09-penghasilan.md) |

@@ -30,7 +30,7 @@ Status saldo di bagian tengah punya dua kemungkinan:
 | Tampilan | Artinya | Langkah Anda berikutnya |
 |---|---|---|
 | **Saldo mencukupi** | Saldo tersedia Anda cukup untuk membayar harga semua media terpilih | Lanjutkan ke **Buat Kampanye** |
-| **Saldo kurang Rp X** dengan tautan **Top Up** | Saldo tersedia Anda kurang sebesar Rp X | Klik **Top Up**, lalu isi saldo |
+| **Saldo kurang X** dengan tautan **Top Up** | Saldo tersedia Anda kurang sebesar X | Klik **Top Up**, lalu isi saldo |
 
 Keterangan saldo hanya muncul bila saldo berhasil dimuat. Bila gagal, bagian ini kosong. Anda tetap bisa membuat kampanye.
 
@@ -103,7 +103,7 @@ Pilih salah satu cara ini:
 
 ### Cara mengisi saldo dari bar seleksi
 
-1. Klik **Top Up** di samping tulisan **Saldo kurang Rp X**.
+1. Klik **Top Up** di samping tulisan **Saldo kurang X**.
 2. Isi jendela **Top Up** yang terbuka di halaman yang sama. Langkah lengkapnya ada di [Saldo dan Top Up](../08-saldo-dan-top-up.md).
 3. Tutup jendela Top Up. Status saldo di bar berubah sendiri.
 

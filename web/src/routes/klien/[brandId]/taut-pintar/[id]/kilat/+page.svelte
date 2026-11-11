@@ -13,7 +13,7 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import TautBottomBar from '../../_bottom-bar.svelte';
 	import { rpCurrency, isCampaignDone } from '../../_shared';
-	import { tcToRp } from '$lib/credits/rupiah';
+	import { tcToNominal } from '$lib/credits/rupiah';
 	import PageTitle from '$lib/components/page-title.svelte';
 
 	const brandId = $derived(page.params.brandId as string);
@@ -203,7 +203,7 @@
 	const budgetError = $derived.by(() => {
 		if (!budgetRp.trim()) return tr('Anggaran kampanye wajib diisi.');
 		if (budgetValue <= 0) return tr('Anggaran harus lebih dari 0.');
-		if (budgetValue > 1_000_000_000) return tr('Anggaran maksimal Rp 1.000.000.000.');
+		if (budgetValue > 1_000_000_000) return tr('Anggaran maksimal 1.000.000.000.');
 		return null;
 	});
 
@@ -394,7 +394,7 @@
 			{#if campaignName}
 				<span class="inline-flex max-w-[260px] items-center gap-1.5 truncate rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold" style="background-color: var(--muted);" title={campaignName}>{campaignName}</span>
 			{/if}
-			<span class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-bold" style="background-color: var(--success-soft); color: var(--success);" title={tr('Saldo Anda')}><Wallet size={13} />{tcToRp(wallet, rateIdr)}</span>
+			<span class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-bold" style="background-color: var(--success-soft); color: var(--success);" title={tr('Saldo Anda')}><Wallet size={13} />{tcToNominal(wallet, rateIdr)}</span>
 		</div>
 	</div>
 
@@ -543,7 +543,7 @@
 										{#if m.reason}<span class="block truncate text-[11px] text-muted-foreground">{m.reason}</span>{/if}
 									</span>
 									<span class="shrink-0 text-right">
-										<span class="block text-[12px] font-semibold">{tcToRp(m.credit_cost ?? 0, rateIdr)}</span>
+										<span class="block text-[12px] font-semibold">{tcToNominal(m.credit_cost ?? 0, rateIdr)}</span>
 									</span>
 								</label>
 							{/each}
@@ -563,7 +563,7 @@
 				<span class="mt-3.5 self-start text-lg font-semibold" style="color: var(--border);">+</span>
 				<div class="flex flex-col gap-1">
 					<p class="text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">{tr('Estimasi Biaya Media')}</p>
-					<p class="text-[17px] font-bold leading-tight">{tcToRp(totalTc, rateIdr)}</p>
+					<p class="text-[17px] font-bold leading-tight">{tcToNominal(totalTc, rateIdr)}</p>
 				</div>
 				{#if budgetValue > 0}
 					<div class="flex flex-col gap-1">

@@ -99,7 +99,7 @@ Hal-hal tentang angka ini:
 
 ### Kolom Harga
 
-Kolom ini menampilkan harga satu publikasi, yaitu satu artikel di media itu, misalnya **Rp500.000**. Di HP, harga pindah ke bawah nama media.
+Kolom ini menampilkan harga satu publikasi, yaitu satu artikel di media itu, misalnya **500.000**. Di HP, harga pindah ke bawah nama media.
 
 Media yang belum punya harga tidak tampil di katalog. Harga di kolom ini dijumlahkan menjadi total biaya di bar bawah dan di jendela **Simpan ke Kampanye**.
 

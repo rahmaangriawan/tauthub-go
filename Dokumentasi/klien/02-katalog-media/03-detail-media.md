@@ -122,7 +122,7 @@ Menurut keterangan di kartu, bila naskah memuat topik itu, AI Validator (pemerik
 
 ### Biaya dan tombol lanjut
 
-Bagian bawah panel menampilkan **BIAYA PUBLIKASI**, yaitu harga satu artikel di media itu, misalnya **Rp500.000**. Di sebelahnya ada tombol **Lanjut ke Dapur Produksi**.
+Bagian bawah panel menampilkan **BIAYA PUBLIKASI**, yaitu harga satu artikel di media itu, misalnya **500.000**. Di sebelahnya ada tombol **Lanjut ke Dapur Produksi**.
 
 ## Cara menggunakan
 

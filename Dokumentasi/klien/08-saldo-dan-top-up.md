@@ -27,7 +27,7 @@ Saat Anda memesan publikasi, biayanya pindah dari tersedia ke tertahan. Bila art
 
 | Kartu | Isinya |
 |---|---|
-| **Saldo tersedia** | Uang yang siap dipakai. Bila ada tagihan belum dibayar, muncul tambahan "+ Rp… menunggu pembayaran". Bilah di bawahnya menunjukkan bagian **Tersedia**, **Tertahan**, dan **Terpakai** dalam persen |
+| **Saldo tersedia** | Uang yang siap dipakai. Bila ada tagihan belum dibayar, muncul tambahan "+ … menunggu pembayaran". Bilah di bawahnya menunjukkan bagian **Tersedia**, **Tertahan**, dan **Terpakai** dalam persen |
 | **Tertahan** | Uang yang disisihkan untuk pesanan yang masih berjalan |
 | **Total terpakai** | Uang yang sudah ditagihkan |
 
@@ -39,11 +39,11 @@ Saat Anda memesan publikasi, biayanya pindah dari tersedia ke tertahan. Bila art
 
 1. Klik **Top Up Saldo**, atau klik kotak saldo di bar atas halaman mana pun. Di HP, buka **Menu lainnya** lalu klik baris saldo.
 2. Pilih nominal di bawah **Pilih Nominal**. Pilihan tetapnya berasal dari pengaturan Tauthub dan bisa berubah.
-3. Untuk nominal sendiri, klik **Nominal Lain**, lalu ketik jumlah rupiah di kolom **Atau masukkan nominal lainnya**. Minimumnya Rp10.000 dan tertulis di tombol. Kolom ini otomatis membatasi nominal yang terlalu besar.
+3. Untuk nominal sendiri, klik **Nominal Lain**, lalu ketik jumlah rupiah di kolom **Atau masukkan nominal lainnya**. Minimumnya 10.000 dan tertulis di tombol. Kolom ini otomatis membatasi nominal yang terlalu besar.
 4. Centang **Saya butuh Faktur Pajak (PPN 11%)** bila Anda perlu faktur. Lalu isi **Nama Perusahaan (Sesuai NPWP)**, **Nomor NPWP**, dan **Alamat NPWP**. Ketiganya wajib.
 5. Periksa **Ringkasan Tagihan**: **Subtotal**, **PPN 11%**, dan **Total Pembayaran**. PPN hanya dihitung bila faktur pajak dicentang. PPN tidak menambah saldo. Di bawahnya tertulis "Belum termasuk biaya gateway".
 6. Klik **Lanjutkan ke Pembayaran →**. Tombol mati bila nominal belum dipilih atau di bawah minimum.
-7. Klik **Bayar Sekarang (Rp…)** pada tampilan "Pesanan dibuat". Halaman pembayaran terbuka di tab baru. Periksa nominal di sana sebelum Anda membayar.
+7. Klik **Bayar Sekarang (…)** pada tampilan "Pesanan dibuat". Halaman pembayaran terbuka di tab baru. Periksa nominal di sana sebelum Anda membayar.
 8. Selesaikan pembayaran, lalu kembali ke tab Dashboard Klien.
 
 Saldo masuk sendiri setelah penyedia pembayaran (payment gateway, yaitu layanan yang menerima uang Anda) memastikan pembayaran lunas. Bila saldo belum berubah, klik **Saya sudah bayar — Muat ulang saldo**.
@@ -103,7 +103,6 @@ Bila alamat halaman tidak membawa nomor transaksi, layar menulis "Transaction ID
 | Hijau, tanda + | "Top Up Saldo (…) berhasil"; "Kompensasi topup gagal"; "Kredit reservasi dikembalikan (publikasi batal/ditolak)" | Saldo tersedia bertambah |
 | Abu-abu, tanpa tanda | "Reservasi kredit untuk publikasi" | Uang disisihkan untuk pesanan. Belum terpakai dan bisa kembali |
 | Merah, tanda − | "Kredit publikasi ditagihkan (artikel terbit)"; keterangan berawalan "Taut Pintar" tentang penulisan AI artikel; "Gambar AI untuk artikel"; "Analisis The Profiler" | Uang terpakai |
-| Merah, tanda − | Keterangan "Saldo hangus" untuk akun pasif 12 bulan tanpa transaksi dan publikasi | Saldo tersedia dihanguskan |
 | Merah, tanda − | "Pengembalian saldo klaim Link Guardian (garansi tayang)" | Baris ini bertanda − padahal saldo tersedia bertambah |
 
 Pada baris kelompok kampanye, angka di kanan adalah total biaya terpakai untuk kampanye itu. Tulisan "ditahan" menunjukkan uang yang masih disisihkan. Pada kelompok **Lainnya**, angka adalah selisih bersihnya: hijau bila bertambah, merah bila berkurang. Untuk klaim garansi tayang, lihat [Link Guardian](06-link-guardian.md).
@@ -111,7 +110,7 @@ Pada baris kelompok kampanye, angka di kanan adalah total biaya terpakai untuk k
 ## Aturan dan batasan
 
 - Untuk Top Up, hak akses Anda di brand harus penulis atau lebih tinggi. Akun dengan hak lebih rendah bisa melihat saldo dan melaporkan top up gagal. Namun, Top Up mereka ditolak dengan pesan "Brand not found". Bila Anda tidak yakin dengan hak akses Anda, tanyakan kepada pemilik brand.
-- Saldo hangus (hilang) bila brand tidak punya transaksi saldo dan tidak punya publikasi selama 12 bulan. Yang hangus hanya saldo tersedia. Uang tertahan tidak disentuh. Penghangusan tidak bisa dibatalkan dan tercatat di riwayat.
+- Saldo tidak punya masa berlaku dan tidak hangus, berapa lama pun Anda belum memakainya.
 - Bila media tidak memutuskan dalam 3×24 jam (tiga hari tiga malam), publikasi batal sendiri dan nilainya kembali ke saldo.
 - Bila saldo tersedia dan uang tertahan brand Anda nol, Anda bisa menerima satu pengingat berjudul "Saldo kampanye masih kosong". Pengingat ini hanya muncul sekali dan hilang setelah saldo terisi.
 - Bila saldo tersedia kurang saat Anda memesan, muncul pesan penolakan seperti "Saldo TC tidak cukup." TC adalah singkatan Tauthub Credit, satuan kredit di balik saldo Anda. Lakukan Top Up, lalu ulangi pesanan.
@@ -121,7 +120,7 @@ Pada baris kelompok kampanye, angka di kanan adalah total biaya terpakai untuk k
 | "Belum ada payment gateway aktif. Hubungi admin." | Penyedia pembayaran belum diaktifkan | Hubungi tim Tauthub |
 | "Terlalu banyak percobaan. Tunggu satu menit lalu coba lagi." | Top Up dicoba terlalu sering | Tunggu satu menit |
 | "Pembayaran sebelumnya batal atau kedaluwarsa. Silakan coba top up lagi." | Tagihan sebelumnya sudah tidak berlaku | Klik **Lanjutkan ke Pembayaran →** lagi |
-| "Minimal Rp10.000." | Nominal di bawah minimum | Naikkan nominal |
+| "Minimal 10.000." | Nominal di bawah minimum | Naikkan nominal |
 | "Lengkapi Nama Perusahaan, Nomor NPWP, dan Alamat NPWP." | Faktur pajak dicentang tetapi isiannya kosong | Lengkapi isian atau hapus centang |
 | "Terjadi kesalahan." | Top Up dari Beranda gagal | Ulangi dari kotak saldo atau halaman **Saldo** untuk melihat pesan yang lebih jelas |
 

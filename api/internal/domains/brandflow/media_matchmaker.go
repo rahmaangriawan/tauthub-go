@@ -418,12 +418,12 @@ func mmApplyBriefContext(crit mmCriteria, brief string) (mmCriteria, []string) {
 		crit.BudgetTotal = crit.BudgetMax
 		crit.BudgetMax = 0
 		crit.BudgetMin = 0
-		notes = append(notes, "Anggaran Rp"+bsIntlIDR(crit.BudgetTotal)+" dibaca sebagai total kampanye, bukan harga per media — media dipilih sampai totalnya tidak melebihi angka itu.")
+		notes = append(notes, "Anggaran "+bsNumberID(crit.BudgetTotal)+" dibaca sebagai total kampanye, bukan harga per media — media dipilih sampai totalnya tidak melebihi angka itu.")
 	case crit.BudgetTotal > 0 && crit.BudgetMax <= 0 && crit.Count <= 0 && hasPerMedia && !hasTotal:
 		// "maksimal 200k per media" tanpa total/jumlah → plafon per media.
 		crit.BudgetMax = crit.BudgetTotal
 		crit.BudgetTotal = 0
-		notes = append(notes, "Rp"+bsIntlIDR(crit.BudgetMax)+" dibaca sebagai batas harga per media sesuai kata \"per media\" di brief.")
+		notes = append(notes, bsNumberID(crit.BudgetMax)+" dibaca sebagai batas harga per media sesuai kata \"per media\" di brief.")
 	}
 	return crit, notes
 }

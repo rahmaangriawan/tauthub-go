@@ -703,10 +703,10 @@ func (d *Deps) PartnerVipUpdate(w http.ResponseWriter, r *http.Request) {
 				isReguler := tier == "vip_reguler"
 				event = "vip.enabled"
 				title = "Selamat! Anda sekarang VVIP"
-				body = "Anda sekarang menjadi VVIP Tauthub dengan komisi 5% dan CPA Rp15.000/domain."
+				body = "Anda sekarang menjadi VVIP Tauthub dengan komisi 5% dan CPA 15.000/domain."
 				if isReguler {
 					title = "Selamat! Anda sekarang VIP Reguler"
-					body = "Fee affiliate Rp10.000 per domain untuk 1000 domain pertama, Rp5.000 untuk domain berikutnya. Kontrak berlaku 60 hari dan komisi transaksi tetap 1%."
+					body = "Fee affiliate 10.000 per domain untuk 1000 domain pertama, 5.000 untuk domain berikutnya. Kontrak berlaku 60 hari dan komisi transaksi tetap 1%."
 				}
 			}
 			link := "/mitra"

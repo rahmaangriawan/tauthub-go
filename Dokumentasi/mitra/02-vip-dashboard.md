@@ -161,8 +161,8 @@ Menu ini hanya untuk VVIP. Mitra VIP Reguler memantau komisinya di [Referral Mit
 **Mengapa kartu CPA Balance tidak tampil?**
 Kartu ini hanya tampil saat keanggotaan VIP aktif. Periksa apakah kontrak Anda sudah berakhir.
 
-**Mengapa Komisi Transaksi bernilai Rp0?**
-Komisi tercatat bila ada artikel yang terbit di media milik mitra yang mendaftar lewat tautan Anda. Anda yakin ada transaksi, tetapi angkanya tetap Rp0? Buat tiket di [Dukungan](12-dukungan.md) dan sertakan tanggal artikelnya.
+**Mengapa Komisi Transaksi bernilai 0?**
+Komisi tercatat bila ada artikel yang terbit di media milik mitra yang mendaftar lewat tautan Anda. Anda yakin ada transaksi, tetapi angkanya tetap 0? Buat tiket di [Dukungan](12-dukungan.md) dan sertakan tanggal artikelnya.
 
 **Mengapa daftar domain referral kosong?**
 Belum ada domain yang tercatat dari mitra yang mendaftar lewat tautan Anda. Bagikan tautan Anda dari [Referral Mitra](08-referral-mitra.md).

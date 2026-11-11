@@ -49,7 +49,7 @@ Tombol **Ringkas Brief** tetap mati sampai brief mencapai 15 karakter dan jenis 
 
 Contoh brief:
 
-*Kami PT Maju Jaya, produsen kopi sachet. Kami ingin memperkenalkan produk baru lewat artikel di 5 media berbahasa Indonesia dari kategori Bisnis dan Lifestyle. Total anggaran Rp3.000.000, dengan harga per media sekitar Rp400.000 sampai Rp700.000. DA minimal 30. Setiap artikel minimal 600 kata dengan 1 backlink dofollow permanen. Hindari klaim kesehatan yang berlebihan.*
+*Kami PT Maju Jaya, produsen kopi sachet. Kami ingin memperkenalkan produk baru lewat artikel di 5 media berbahasa Indonesia dari kategori Bisnis dan Lifestyle. Total anggaran 3.000.000, dengan harga per media sekitar 400.000 sampai 700.000. DA minimal 30. Setiap artikel minimal 600 kata dengan 1 backlink dofollow permanen. Hindari klaim kesehatan yang berlebihan.*
 
 > **Tips:** Brief yang jelas menghasilkan saran yang lebih tepat. Sebutkan jumlah media, kategori, anggaran, syarat DA (skor kekuatan situs) atau AI Trust (skor kesiapan situs dibaca mesin AI), panjang artikel, jumlah dan jenis backlink (tautan dari artikel ke situs Anda), bahasa, serta topik yang harus dihindari.
 
@@ -92,15 +92,15 @@ Lencana status di kolom kanan punya lima kemungkinan:
 
 Brief sering menyebut dua jenis anggaran. Layar menampilkannya terpisah:
 
-- **Total** adalah anggaran seluruh kampanye. Angkanya tampil tebal, misalnya **Rp3 juta**.
-- **Per media** adalah kisaran harga satu media. Angkanya tampil kecil di bawahnya, misalnya **Rp400 rb – Rp700 rb /media**.
+- **Total** adalah anggaran seluruh kampanye. Angkanya tampil tebal, misalnya **3 juta**.
+- **Per media** adalah kisaran harga satu media. Angkanya tampil kecil di bawahnya, misalnya **400 rb – 700 rb /media**.
 
 Tauthub membaca ulang kalimat brief Anda untuk menentukan maksudnya:
 
 - Satu angka tanpa kata "per media" dibaca sebagai total anggaran kampanye. Media dipilih sampai jumlahnya tidak melebihi angka itu.
 - Angka yang ditulis dengan kata seperti "per media" atau "setiap media", tanpa total dan tanpa jumlah media, dibaca sebagai batas harga per media.
 
-Supaya tidak salah baca, tulis dengan jelas, misalnya "total anggaran Rp3.000.000" atau "maksimal Rp500.000 per media". Anda bisa memeriksa dan mengubah hasil bacaannya lewat **Edit ringkasan**.
+Supaya tidak salah baca, tulis dengan jelas, misalnya "total anggaran 3.000.000" atau "maksimal 500.000 per media". Anda bisa memeriksa dan mengubah hasil bacaannya lewat **Edit ringkasan**.
 
 ### Cara mencari dan memilih media
 

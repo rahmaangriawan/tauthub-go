@@ -14,7 +14,7 @@
 		saldoHref = null,
 		onTopUp = null
 	}: {
-		/** Teks saldo yang ditampilkan (mis. "Rp 6.284.000"). Kosong = tanpa baris saldo. */
+		/** Teks saldo yang ditampilkan (mis. "6.284.000"). Kosong = tanpa baris saldo. */
 		saldoLabel?: string;
 		/** Bila diisi, baris saldo menjadi tautan (dipakai portal mitra). */
 		saldoHref?: string | null;

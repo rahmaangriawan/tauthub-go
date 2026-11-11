@@ -49,7 +49,7 @@
 	const fmtCompact = (value: number) =>
 		value > 0 ? new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 }).format(value) : null;
 	const idr = (value: number) =>
-		new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' }).format(value);
+		new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }).format(value);
 
 	const autoPath = $derived(Boolean(media.auto_publish));
 	const trafficSw = $derived(media.sw_visits != null && media.sw_visits > 0 ? fmtCompact(media.sw_visits) : null);

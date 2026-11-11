@@ -253,18 +253,18 @@ func (d *Deps) createSettlement(w http.ResponseWriter, r *http.Request, partner 
 		}
 		if requestedAmount > netAvailable {
 			httpx.Error(w, http.StatusBadRequest,
-				"Nominal melebihi saldo yang tersedia ("+formatIDR(netAvailable)+").")
+				"Nominal melebihi saldo yang tersedia ("+formatNominal(netAvailable)+").")
 			return
 		}
 		if requestedAmount < cfg.MinimumWithdrawIDR {
 			httpx.Error(w, http.StatusBadRequest,
-				"Minimal saldo untuk penarikan dana adalah "+formatIDR(cfg.MinimumWithdrawIDR)+".")
+				"Minimal saldo untuk penarikan dana adalah "+formatNominal(cfg.MinimumWithdrawIDR)+".")
 			return
 		}
 		gross = requestedAmount
 	} else if netAvailable < cfg.MinimumWithdrawIDR {
 		httpx.Error(w, http.StatusBadRequest,
-			"Minimal saldo untuk penarikan dana adalah "+formatIDR(cfg.MinimumWithdrawIDR)+".")
+			"Minimal saldo untuk penarikan dana adalah "+formatNominal(cfg.MinimumWithdrawIDR)+".")
 		return
 	}
 
@@ -382,7 +382,7 @@ func (d *Deps) createSettlement(w http.ResponseWriter, r *http.Request, partner 
 			`INSERT INTO notifications (id, user_id, type, title, body, link)
 			 VALUES (gen_random_uuid(), $1, 'withdrawal.requested', $2, $3, $4)`,
 			partner.UserID, "Penarikan dana diterima",
-			"Permintaan penarikan "+formatIDR(net)+" diterima dan menunggu review Admin.", partnerLink)
+			"Permintaan penarikan "+formatNominal(net)+" diterima dan menunggu review Admin.", partnerLink)
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"settlement": settlementJSON(created)})
 }
@@ -431,6 +431,12 @@ func padLeft(s string, n int) string {
 		s = "0" + s
 	}
 	return s
+}
+
+// formatNominal: nominal berpemisah titik tanpa kata "Rp". Dipakai untuk pesan
+// yang dibaca mitra; pesan untuk admin tetap memakai formatIDR.
+func formatNominal(value float64) string {
+	return strings.TrimPrefix(formatIDR(value), "Rp")
 }
 
 // formatIDR: parity Intl.NumberFormat("id-ID", {style:"currency",currency:"IDR",maximumFractionDigits:0}).

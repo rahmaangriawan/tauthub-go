@@ -125,7 +125,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 	const vipPill = $derived(isVip || isVipTier(vip.data?.tier) ? vipTierBadge(vip.data?.tier) : null);
 	const saldo = $derived(earnings.data?.summary?.settled ?? 0);
 	// Label saldo dipakai dua tempat: pil di header (desktop) dan menu ikon (mobile).
-	const saldoLabel = $derived('Rp' + saldo.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }));
+	const saldoLabel = $derived(saldo.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' }));
 
 	/**
 	 * Menu aktif hanya bila path persis sama atau berada DI BAWAH href-nya.

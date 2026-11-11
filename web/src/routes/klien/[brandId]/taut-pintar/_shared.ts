@@ -164,7 +164,7 @@ export const ANGLE_DYNAMIC_FIELDS: Record<string, DynamicAngleField[]> = {
 		{ key: 'availability', label: 'Di mana/kapan bisa didapat dan harganya?', placeholder: 'Contoh: tersedia di Play Store, gratis 30 hari...' }
 	],
 	funding_announcement: [
-		{ key: 'funding_round', label: 'Tahap dan besaran pendanaan?', placeholder: 'Contoh: Series A sebesar Rp 50 miliar...' },
+		{ key: 'funding_round', label: 'Tahap dan besaran pendanaan?', placeholder: 'Contoh: Series A sebesar 50 miliar...' },
 		{ key: 'investors', label: 'Siapa investor yang terlibat?', placeholder: 'Contoh: dipimpin VenturX dengan partisipasi Angel Cap...' },
 		{ key: 'fund_usage', label: 'Dana akan dipakai untuk apa?', placeholder: 'Contoh: ekspansi ke 5 kota dan riset AI...' }
 	],
@@ -380,8 +380,8 @@ export function textToHtml(text: string): string {
 /* ─── Format ──────────────────────────────────────────────────────────── */
 
 export const fmtIdr = (n: number) => (n ?? 0).toLocaleString('id-ID');
-export const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
-const rpFmt = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0, roundingMode: 'trunc' });
+export const rp = (n: number) => `${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+const rpFmt = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' });
 export const rpCurrency = (n: number) => rpFmt.format(n ?? 0);
 
 export function dt(v: string | null | undefined): string {

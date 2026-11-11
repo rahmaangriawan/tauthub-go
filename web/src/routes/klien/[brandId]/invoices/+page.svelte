@@ -51,7 +51,7 @@
 		s === 'paid' ? 'background-color: var(--success-soft); color: var(--success);'
 		: s === 'issued' ? 'background-color: var(--warning-soft); color: var(--warning);'
 		: 'background-color: var(--muted); color: var(--muted-foreground);';
-	const fmt = (n: number) => n.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+	const fmt = (n: number) => n.toLocaleString('id-ID', { maximumFractionDigits: 0 });
 	const fmtDate = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '—');
 </script>
 

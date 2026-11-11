@@ -59,7 +59,7 @@ Jendela menutup dan gambar itu menjadi gambar utama.
 
 1. Buka **Pustaka Gambar AI**.
 2. Isi kotak **Generate Baru** dengan deskripsi gambar (paling banyak 2.000 karakter). Pada mode gambar utama, kotak sudah terisi judul artikel.
-3. Klik **Generate · Rp…**. Kotak **Buat Gambar Cover dengan AI** atau **Buat Gambar Artikel dengan AI** muncul.
+3. Klik **Generate · …**. Kotak **Buat Gambar Cover dengan AI** atau **Buat Gambar Artikel dengan AI** muncul.
 4. Periksa **Prompt Gambar**, **Biaya Pembuatan**, **Saldo Saat Ini**, dan **Estimasi Sisa Saldo**. Prompt gambar adalah perintah tertulis yang dibaca AI.
 5. Klik **Ya, Buat Gambar**. Saldo baru berkurang setelah gambar jadi.
 

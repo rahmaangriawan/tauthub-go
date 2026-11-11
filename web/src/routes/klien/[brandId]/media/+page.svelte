@@ -1367,7 +1367,7 @@
 							{/if}
 						</span>
 						<span class="selectedListRowName" title={it.name}>{it.name}</span>
-						<span class="selectedListRowPrice">Rp {fmt(it.price)}</span>
+						<span class="selectedListRowPrice">{fmt(it.price)}</span>
 						<button
 							class="selectedListRemove"
 							type="button"
@@ -1385,7 +1385,7 @@
 			</div>
 			<div class="selectedListFoot">
 				<span>{tr('Total')}</span>
-				<strong>Rp {fmt(totalSelectedPrice)}</strong>
+				<strong>{fmt(totalSelectedPrice)}</strong>
 			</div>
 		</div>
 	{/if}
@@ -1641,7 +1641,7 @@
 							class="priceRangeInput"
 							type="text"
 							inputmode="numeric"
-							placeholder={tr('Rp Min')}
+							placeholder={tr('Harga min')}
 							bind:value={priceMinText}
 							oninput={() => (page_ = 1)}
 							onblur={normalizePriceInputs}
@@ -1651,7 +1651,7 @@
 							class="priceRangeInput"
 							type="text"
 							inputmode="numeric"
-							placeholder={tr('Rp Maks')}
+							placeholder={tr('Harga maks')}
 							bind:value={priceMaxText}
 							oninput={() => (page_ = 1)}
 							onblur={normalizePriceInputs}
@@ -1886,7 +1886,7 @@
 									<div class="mediaRowCol">
 									<!-- Harga versi HP: kolom Harganya disembunyikan di layar kecil. -->
 									{#if (m.client_price ?? m.price ?? 0) > 0}
-										<span class="priceMobile">Rp {fmt(m.client_price ?? m.price ?? 0)}</span>
+										<span class="priceMobile">{fmt(m.client_price ?? m.price ?? 0)}</span>
 									{:else}
 										<span class="priceMobile" style="color: var(--muted-foreground);">{tr('Belum ada harga')}</span>
 									{/if}
@@ -2094,7 +2094,7 @@
 
 								<td class="modernTd">
 									{#if (m.client_price ?? m.price ?? 0) > 0}
-										<span class="priceBoldText">Rp {fmt(m.client_price ?? m.price ?? 0)}</span>
+										<span class="priceBoldText">{fmt(m.client_price ?? m.price ?? 0)}</span>
 									{:else}
 										<!-- Media tanpa harga tidak bisa dipesan; jangan tampilkan "Rp 0"
 										     yang terbaca sebagai gratis. -->
@@ -2290,7 +2290,7 @@
 												{/if}
 											</span>
 											<span class="campaignSelectedName" title={it.name}>{it.name}</span>
-											<span class="campaignSelectedPrice">Rp {fmt(it.price)}</span>
+											<span class="campaignSelectedPrice">{fmt(it.price)}</span>
 											<button
 												class="campaignSelectedRemove"
 												type="button"
@@ -2311,7 +2311,7 @@
 									<div class="campaignSummaryIcon"><Database size={18} /></div>
 									<span>{tr("Total biaya publikasi")}</span>
 								</div>
-								<strong>Rp {fmt(totalSelectedPrice)}</strong>
+								<strong>{fmt(totalSelectedPrice)}</strong>
 							</div>
 							{#if walletAvailableTc !== null}
 								<div class="campaignSummaryRow">
@@ -2319,7 +2319,7 @@
 										<div class="campaignSummaryIcon"><Wallet size={18} /></div>
 										<span>{tr("Saldo kredit")}</span>
 									</div>
-									<strong>Rp {fmt(walletAvailableTc * walletRateIdr)}</strong>
+									<strong>{fmt(walletAvailableTc * walletRateIdr)}</strong>
 								</div>
 							{/if}
 						</div>
@@ -2328,7 +2328,7 @@
 								<div class="campaignBalanceBadge campaignBalanceBadgeLow">
 									<Info size={16} />
 									<span>
-										{tr("Saldo kurang")} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")}
+										{tr("Saldo kurang")} {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")}
 										<a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
 									</span>
 								</div>
@@ -2564,7 +2564,7 @@
 						</button>
 						<div class="selectedBarMobileText">
 							<strong>{selectedIds.size} {tr('Media dipilih')}</strong>
-							<span>{tr('Total')} Rp {fmt(totalSelectedPrice)}</span>
+							<span>{tr('Total')} {fmt(totalSelectedPrice)}</span>
 						</div>
 						<!-- Kosongkan pilihan. Ikon saja dan merah supaya beda jelas
 						     dari tombol ringkasan di sebelahnya. -->
@@ -2645,12 +2645,12 @@
 					     dalam satu blok vertikal (blok saldo terpisah dihapus). -->
 					<div class="selectedStatItem">
 						<span class="selectedStatLabel">{tr('Total publikasi')}</span>
-						<span class="selectedStatPriceVal">Rp {fmt(totalSelectedPrice)}</span>
+						<span class="selectedStatPriceVal">{fmt(totalSelectedPrice)}</span>
 						{#if walletAvailableTc !== null}
 							{#if totalSelectedCredits > walletAvailableTc}
 								<span class="walletStatus walletShort">
 									<CircleAlert size={13} class="shrink-0" />
-									<span>{tr('Saldo kurang')} Rp {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)}</span>
+									<span>{tr('Saldo kurang')} {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)}</span>
 									<a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr('Top Up')}</a>
 								</span>
 							{:else}

@@ -14,7 +14,7 @@
 	import NaskahModal from './_naskah-modal.svelte';
 	import QcPanel from './_qc-panel.svelte';
 	import { MANUAL_PROFILER_REASON, buildTrackedUrl, stripScheme, withScheme, textToHtml, cleanPastedText, toJakartaDisplay, toLocalInput, isCampaignDone } from '../../_shared';
-	import { tcToRp } from '$lib/credits/rupiah';
+	import { tcToNominal } from '$lib/credits/rupiah';
 	import { ARTICLE_DEFAULT_COVER, sameOriginAssetUrl } from '$lib/media/cover';
 	import { mediaDomainLabel } from '$lib/media/domain-label';
 	import PageTitle from '$lib/components/page-title.svelte';
@@ -1504,7 +1504,7 @@
 	});
 	const pendingCount = $derived(selected.filter((m) => !hasDoc(m) || canRegen(m)).length);
 	// Biaya ditampilkan dalam rupiah memakai kurs aktif (fallback Rp 1.000).
-	const toRp = (credits: number) => tcToRp(credits, rateIdr);
+	const toRp = (credits: number) => tcToNominal(credits, rateIdr);
 
 	// Rincian biaya penulisan dalam bahasa manusia, tampil di bar bawah supaya
 	// angka tidak muncul tanpa penjelasan. Angka tooltip = biaya tombol

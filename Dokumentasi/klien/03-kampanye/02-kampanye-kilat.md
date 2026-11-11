@@ -28,7 +28,7 @@ Klik **Buka Kampanye** pada kartu berlabel **Kilat** yang belum berstatus **Plac
 | Kolom | Isi | Aturan |
 |---|---|---|
 | **URL Website atau Produk** | Alamat halaman utama website brand, contoh `https://namabrand.com`. | Wajib. Paling banyak 500 huruf. Tanpa spasi atau tanda kutip. Hanya `http://` atau `https://`. Bila Anda tidak mengetik awalan `https://`, awalan itu ditambahkan sendiri. |
-| **Anggaran Kampanye (Rupiah)** | Jumlah total uang untuk biaya media. Titik pemisah ribuan muncul sendiri. | Wajib. Lebih dari 0 dan paling banyak Rp1.000.000.000. |
+| **Anggaran Kampanye (Rupiah)** | Jumlah total uang untuk biaya media. Titik pemisah ribuan muncul sendiri. | Wajib. Lebih dari 0 dan paling banyak 1.000.000.000. |
 
 Kartu **Ringkasan Strategi AI** memuat **Brand**, **Industri**, **Sudut Berita / Nilai Jual**, **Kata Kunci** (paling banyak 8), dan **Target Audiens**. Di sudut kartu ada tujuan kampanye yang disimpulkan AI: **Kesadaran Merek**, **Dominasi SEO**, **Konversi Penjualan**, atau **Manajemen Reputasi**. Bila ada hal yang tidak pasti terbaca, baris **Perlu dikonfirmasi** menyebutkannya.
 
@@ -93,7 +93,7 @@ Pesan tentang isian yang salah muncul di bawah kolom. Pesan lain muncul di kotak
 | **URL terlalu panjang (maksimal 500 karakter).**, **URL tidak boleh mengandung spasi, tanda kutip, atau tanda kurung siku.**, atau **Hanya URL http:// atau https:// yang diterima.** | Alamat tidak sesuai aturan kolom. | Perbaiki alamat sesuai aturan di tabel kolom. |
 | **Format URL tidak dikenali. Contoh: https://namabrand.com** atau **Alamat domain tidak valid.** | Alamat tidak bisa dibaca sebagai alamat website. | Periksa tulisannya, atau salin alamat dari browser. |
 | **Alamat lokal atau jaringan internal tidak diizinkan.** | Alamat mengarah ke komputer lokal atau jaringan internal. | Pakai alamat website yang terbuka untuk umum. |
-| **Anggaran harus lebih dari 0.** atau **Anggaran maksimal Rp 1.000.000.000.** | Anggaran di luar batas. | Isi anggaran sesuai batas yang diizinkan. |
+| **Anggaran harus lebih dari 0.** atau **Anggaran maksimal 1.000.000.000.** | Anggaran di luar batas. | Isi anggaran sesuai batas yang diizinkan. |
 | **Gagal memuat data kampanye.** | Data kampanye tidak terbaca saat halaman dibuka. | Muat ulang halaman. |
 | **Website belum dapat dibaca otomatis (…)** | Website menolak akses, halaman tidak ditemukan, atau isinya kosong. | Coba alamat halaman utama dan pastikan website bisa dibuka oleh umum. |
 | **Website tidak bisa dibaca. Coba URL halaman utama, atau pakai wizard lengkap.** | Isi website tidak terbaca. | Coba URL halaman utama. Pilihan wizard lengkap sudah tidak ditawarkan. |

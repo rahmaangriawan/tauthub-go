@@ -35,7 +35,7 @@
 	];
 	const effectivePackages = $derived(packages.length > 0 ? packages : DEFAULT_PACKAGES);
 
-	const fmtIDR = (n: number) => `Rp ${n.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+	const fmtIDR = (n: number) => `${n.toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 
 	// Minimum top up Rp 10.000 — dihitung dari rate aktif (1 Kredit = rateIdr) supaya
 	// tetap benar kalau admin mengubah rate.
@@ -233,7 +233,7 @@
 									oninput={handleCustomTcChange}
 									disabled={busy}
 								/>
-								<span class="tu-custom-suffix">Rp</span>
+								
 							</div>
 						</div>
 						<div class="tu-custom-meta">
@@ -458,15 +458,6 @@
 		outline: none;
 	}
 	.tu-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent); }
-	.tu-custom-wrap .tu-input { padding-right: 54px; }
-	.tu-custom-suffix {
-		position: absolute;
-		right: 12px;
-		font-size: 12px;
-		font-weight: 700;
-		color: var(--muted-foreground);
-		pointer-events: none;
-	}
 	.tu-custom-meta {
 		display: flex;
 		align-items: center;

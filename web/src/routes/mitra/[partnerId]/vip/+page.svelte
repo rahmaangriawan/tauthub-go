@@ -123,7 +123,7 @@
 		return { line, area };
 	}
 
-	const idr = (n: number) => 'Rp' + Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' });
+	const idr = (n: number) => Number(n || 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' });
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleDateString('id-ID') : '—');
 	const KIND_LABEL: Record<string, string> = $derived({ cpa: 'CPA', transaction_commission: tr('Komisi Transaksi'), referral: 'Referral', publication: tr('Publikasi') });
 	const STATUS_LABEL: Record<string, string> = $derived({ pending: tr('Menunggu'), approved: tr('Disetujui'), rejected: tr('Ditolak'), available: tr('Tersedia'), paid: tr('Dibayar'), reversed: tr('Dibalik'), settled: tr('Selesai'), voided: tr('Dibatalkan') });

@@ -461,14 +461,6 @@ func emailSampleData(audience, event string) map[string]string {
 		s["status"] = "Saldo menipis"
 		s["isi"] = "Saldo akun Anda saat ini Rp 120.000."
 		s["link"] = "/klien/tauthub/credits"
-		switch event {
-		case "billing.balance_forfeit_warning":
-			s["status"] = "Peringatan"
-			s["isi"] = "Saldo akun Anda akan hangus dalam 7 hari."
-		case "billing.balance_forfeited":
-			s["status"] = "Hangus"
-			s["isi"] = "Saldo akun Anda telah dihanguskan karena akun tidak aktif 12 bulan."
-		}
 
 	case strings.HasPrefix(event, "media."):
 		s["judul"] = "Siar.co.id"

@@ -105,7 +105,7 @@
 	let chatTimes = $state<number[]>([]);
 
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID');
-	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+	const rp = (n: number) => `${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 	// Soft tint util (dipakai callout error, banner, dan badge status).
 	const soft = (token: string) => `color-mix(in srgb, var(${token}) 26%, transparent)`;
 

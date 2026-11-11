@@ -227,19 +227,6 @@ var catalog = []TemplateEvent{
 			cta("Lihat publikasi"),
 		)),
 
-	genericEntry(AudienceClient, "billing.balance_forfeit_warning", "Peringatan saldo hangus", "Saldo Anda akan hangus dalam 7 hari",
-		body(
-			pg("Saldo akun Anda akan hangus dalam 7 hari."),
-			pg("Penghangusan berlaku karena akun tidak memiliki transaksi saldo dan publikasi selama 12 bulan. Setelah hangus, saldo tidak bisa dipulihkan."),
-			pg("Pakai saldo untuk kampanye atau publikasi sebelum tenggat lewat."),
-			cta("Buka saldo"),
-		)),
-	genericEntry(AudienceClient, "billing.balance_forfeited", "Saldo hangus", "Saldo akun Anda telah hangus",
-		body(
-			pg("Saldo akun Anda sudah dihanguskan."),
-			pg("Akun tidak memiliki transaksi saldo dan publikasi selama 12 bulan, sehingga saldo dihanguskan sesuai kebijakan yang berlaku. Tindakan ini final dan tidak bisa dibatalkan."),
-			cta("Buka riwayat saldo"),
-		)),
 	genericEntry(AudienceClient, "billing.topup_needed", "Saldo menipis", "Saldo kredit Anda perlu diisi ulang",
 		body(
 			pg("Saldo kredit Anda menipis."),

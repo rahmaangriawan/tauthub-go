@@ -1333,7 +1333,7 @@
 		pending_review: tr('Menunggu review'), rejected: tr('Ditolak')
 	});
 	const fmt = (n: number) => (n ?? 0).toLocaleString('id-ID');
-	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+	const rp = (n: number) => `${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 </script>
 
 <PageTitle title={tr("Daftar Media")} />
@@ -3065,10 +3065,10 @@
 										</div>
 										<div class="text-left sm:text-right shrink-0 sm:pl-3">
 											<p class="text-xl sm:text-2xl font-extrabold text-emerald-600 tabular-nums">
-												Rp{formPartnerIncome.toLocaleString('id-ID')}
+												{formPartnerIncome.toLocaleString('id-ID')}
 											</p>
 											<p class="text-[11px] font-medium text-emerald-800/80 mt-0.5 tabular-nums">
-												{tr('Bagian Tauthub')} {PLATFORM_CUT_PCT}% · Rp{formPlatformCut.toLocaleString('id-ID')}
+												{tr('Bagian Tauthub')} {PLATFORM_CUT_PCT}% · {formPlatformCut.toLocaleString('id-ID')}
 											</p>
 										</div>
 									</div>

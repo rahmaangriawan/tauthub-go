@@ -879,7 +879,7 @@
 		published: 'success', failed: 'destructive', processing: 'accent', queued: 'accent',
 		revision: 'warning'
 	};
-	const rp = (n: number) => `Rp ${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
+	const rp = (n: number) => `${(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0, roundingMode: 'trunc' })}`;
 	const dt = (v: string | null) => (v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
 	// ── SLA persetujuan (3×24 jam, tanpa perpanjangan) ──────────────────

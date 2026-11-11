@@ -7,7 +7,7 @@
 	import { apiRequest, getStoredSession } from '$lib/auth';
 	import Select from '$lib/components/select.svelte';
 	import { fmtBytes } from '../../_shared';
-	import { rp, tcToRp } from '$lib/credits/rupiah';
+	import { nominal, tcToNominal } from '$lib/credits/rupiah';
 	import type { ProfilerDraft, DynamicAngleField } from '../../_shared';
 	import {
 		ANGLE_DYNAMIC_FIELDS,
@@ -654,11 +654,11 @@
 							</button>
 							{#if mode.value === 'efficient'}
 								<p class="mt-2 inline-flex items-center gap-1 text-xs" style="color: var(--success);">
-									<Coins size={13} /> Saldo: {tcToRp(walletAvailable, rateIdr)} </p>
+									<Coins size={13} /> Saldo: {tcToNominal(walletAvailable, rateIdr)} </p>
 							{/if}
 							{#if mode.value === 'efficient' && sel}
 								<label class="mt-2 block">
-									<span class="text-xs text-muted-foreground">{tr("Nominal Anggaran (Rupiah)")} — {rp(budgetMinRp)} – {rp(budgetMaxRp)}</span>
+									<span class="text-xs text-muted-foreground">{tr("Nominal Anggaran (Rupiah)")} — {nominal(budgetMinRp)} – {nominal(budgetMaxRp)}</span>
 									<input class="app-input mt-1 w-full" inputmode="numeric" autocomplete="off" maxlength="12" placeholder={budgetMinRp.toLocaleString('id-ID')} value={budgetRpInput} oninput={onBudgetInput} />
 								</label>
 							{/if}

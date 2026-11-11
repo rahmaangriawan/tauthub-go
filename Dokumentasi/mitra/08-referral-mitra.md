@@ -116,8 +116,8 @@ Komisi referral dari penghasilan mitra yang Anda ajak belum memunculkan notifika
 
 ## Pertanyaan yang sering diajukan
 
-**Mengapa Komisi Referral Rp0 padahal sudah ada referral?**
-Komisi baru muncul setelah mitra yang Anda ajak mendapat penghasilan, yaitu saat artikel di media mereka terbit. Pendaftar yang baru bergabung belum menambah komisi. Komisi dari pendaftar Klien belum aktif. Komisi dari pendaftaran yang tampak janggal ditahan. Kalau angkanya tetap Rp0 padahal mitra yang Anda ajak sudah punya artikel terbit, buat tiket di [Dukungan](12-dukungan.md).
+**Mengapa Komisi Referral 0 padahal sudah ada referral?**
+Komisi baru muncul setelah mitra yang Anda ajak mendapat penghasilan, yaitu saat artikel di media mereka terbit. Pendaftar yang baru bergabung belum menambah komisi. Komisi dari pendaftar Klien belum aktif. Komisi dari pendaftaran yang tampak janggal ditahan. Kalau angkanya tetap 0 padahal mitra yang Anda ajak sudah punya artikel terbit, buat tiket di [Dukungan](12-dukungan.md).
 
 **Mengapa pendaftar saya tidak muncul di tabel?**
 Pastikan calon pendaftar membuka tautan Anda dan mendaftar di browser yang sama. Akun yang sudah tercatat dari tautan mitra lain tidak berpindah ke Anda. Tabel juga hanya memuat 100 pendaftar terbaru.

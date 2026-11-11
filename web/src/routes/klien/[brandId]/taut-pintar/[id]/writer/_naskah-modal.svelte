@@ -15,7 +15,7 @@
 	import { sanitizeHtml } from '$lib/sanitize-html';
 	import Select from '$lib/components/select.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
-	import { tcToRp } from '$lib/credits/rupiah';
+	import { tcToNominal } from '$lib/credits/rupiah';
 	import { textToHtml, cleanPastedText } from '../../_shared';
 	import { clipboardHtmlToArticle, isDocsClipboardHtml } from '$lib/editor/clipboard-html';
 	import { angleInstructionExample } from '$lib/taut/angle-examples';
@@ -444,9 +444,9 @@
 		let imageRateIdr = $state(0);
 
 		// Biaya & saldo gambar selalu tampil dalam rupiah (kurs aktif dari server).
-		const rpOf = (tc: number, rate: number) => (tc > 0 ? tcToRp(tc, rate) : tr('Gratis'));
+		const rpOf = (tc: number, rate: number) => (tc > 0 ? tcToNominal(tc, rate) : tr('Gratis'));
 		const h2CostRp = $derived(h2ConfirmData ? rpOf(h2ConfirmData.cost, h2ConfirmData.rateIdr) : '—');
-		const h2BalanceRp = $derived(h2ConfirmData?.balance == null ? '—' : tcToRp(h2ConfirmData.balance, h2ConfirmData.rateIdr));
+		const h2BalanceRp = $derived(h2ConfirmData?.balance == null ? '—' : tcToNominal(h2ConfirmData.balance, h2ConfirmData.rateIdr));
 
 			// Jumlah gambar bisa diatur pengguna. Bawaannya 1 — rencana tetap
 			// menghitung penempatan sampai N gambar, tapi pengguna yang menaikkan.
@@ -456,7 +456,7 @@
 		const h2TotalCredits = $derived((h2ConfirmData?.cost ?? 0) * h2Chosen);
 		const h2TotalRp = $derived(h2ConfirmData ? rpOf(h2TotalCredits, h2ConfirmData.rateIdr) : '—');
 		const h2RemainingRp = $derived(
-			h2ConfirmData?.balance == null ? '—' : tcToRp(Math.max(0, h2ConfirmData.balance - h2TotalCredits), h2ConfirmData.rateIdr)
+			h2ConfirmData?.balance == null ? '—' : tcToNominal(Math.max(0, h2ConfirmData.balance - h2TotalCredits), h2ConfirmData.rateIdr)
 		);
 
 		// Saat draf sedang disusun (generate AI / olah dokumen), modal tidak
@@ -2006,7 +2006,7 @@
 										<p class="mt-0.5">
 											{#if imgCost > 0}
 												{tr('Perkiraan biaya')}: {imgRequestCount} × {imgCost} {tr('kredit')}{imgRateIdr > 0
-													? ` ≈ Rp ${imgEstimateRupiah.toLocaleString('id-ID')}`
+													? ` ≈ ${imgEstimateRupiah.toLocaleString('id-ID')}`
 													: ''}.
 											{:else}
 												{tr('Biaya gambar mengikuti tarif yang berlaku saat generate.')}
