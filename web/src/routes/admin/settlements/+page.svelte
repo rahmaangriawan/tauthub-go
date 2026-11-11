@@ -559,28 +559,41 @@
 				</div>
 			</div>
 
-			<div class="rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 40%, white);">
-				<p class="text-xs font-semibold text-muted-foreground">Pembayaran</p>
-				<div class="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-					<span class="text-base font-bold tabular-nums">{fmtRp(payoutOf(d))}</span>
-					<span class="text-[11px] rounded-full px-2 py-0.5" style="background: var(--secondary); color: var(--muted-foreground);">
+			<div class="rounded-xl border p-4" style="border-color: var(--border);">
+				<div class="flex flex-wrap items-center justify-between gap-2">
+					<p class="text-xs font-semibold text-muted-foreground">Pembayaran</p>
+					<span class="rounded-full px-2 py-0.5 text-[11px]" style="background: var(--secondary); color: var(--muted-foreground);">
 						{d.payout_method === 'ewallet' ? 'E-Wallet' : 'Transfer Bank'}
 					</span>
 				</div>
-				<p class="mt-1 text-xs text-muted-foreground">
-					Bruto {fmtRp(d.total_amount)}{#if feeOf(d) > 0} − potongan transfer {fmtRp(feeOf(d))}{/if} → neto {fmtRp(payoutOf(d))}
-				</p>
-				{#if d.payment_reference}<p class="mt-1 text-xs">Ref: {d.payment_reference}</p>{/if}
+				<p class="mt-1 text-2xl font-semibold tabular-nums">{fmtRp(payoutOf(d))}</p>
+				<dl class="mt-3 grid gap-1.5 border-t pt-3 text-xs" style="border-color: var(--border);">
+					<div class="flex justify-between gap-4">
+						<dt class="text-muted-foreground">Bruto</dt>
+						<dd class="tabular-nums">{fmtRp(d.total_amount)}</dd>
+					</div>
+					{#if feeOf(d) > 0}
+						<div class="flex justify-between gap-4">
+							<dt class="text-muted-foreground">Potongan transfer</dt>
+							<dd class="tabular-nums">− {fmtRp(feeOf(d))}</dd>
+						</div>
+					{/if}
+					<div class="flex justify-between gap-4 font-semibold">
+						<dt>Neto</dt>
+						<dd class="tabular-nums">{fmtRp(payoutOf(d))}</dd>
+					</div>
+				</dl>
+				{#if d.payment_reference}<p class="mt-3 text-xs">Ref: {d.payment_reference}</p>{/if}
 				{#if d.receipt_url}<p class="mt-1 text-xs"><a class="underline" href={d.receipt_url} target="_blank" rel="noreferrer">Bukti transfer</a></p>{/if}
 				{#if d.status === 'failed' && d.rejection_reason}<p class="mt-1 text-xs" style="color: var(--destructive);">Alasan tolak: {d.rejection_reason}</p>{/if}
 			</div>
 
-			<div class="rounded-xl border p-3" style="border-color: {hasRek ? 'var(--border)' : 'var(--warning, #d97706)'}; background: {hasRek ? 'color-mix(in srgb, var(--muted) 40%, white)' : 'var(--warning-soft, #fff8e6)'};">
+			<div class="rounded-xl border p-4" style="border-color: {hasRek ? 'var(--border)' : 'var(--warning, #d97706)'}; background: {hasRek ? 'transparent' : 'var(--warning-soft, #fff8e6)'};">
 				<p class="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
 					<Landmark size={13} />Rekening Mitra
 				</p>
 				{#if hasRek}
-					<div class="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-[auto_1fr] sm:gap-x-6">
+					<div class="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-[auto_1fr]">
 						<p class="text-xs font-medium text-muted-foreground">Bank</p>
 						<p class="font-medium">{d.bank_name ?? '—'}</p>
 						<p class="text-xs font-medium text-muted-foreground">Nomor</p>
