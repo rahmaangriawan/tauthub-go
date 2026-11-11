@@ -11,11 +11,17 @@ import (
 // publikasi), plus helper AS-OF untuk merekonstruksi posisi wallet pada
 // tanggal lampau dari credit_ledger_entries.
 
-// finExcludedUserEmails: akun internal / dev yang tidak boleh ikut hitungan.
-// Perubahan daftar ini butuh deploy ulang (sengaja, biar auditable).
+// finExcludedUserEmails: akun internal / dev / smoke-test yang tidak boleh
+// ikut hitungan dashboard keuangan. Email ini di-resolve ke brand_id (via
+// brands.created_by) DAN partner_id (via partners.user_id) — jadi akun klien
+// otomatis bikin saldo & order-nya dikecualikan, dan akun mitra otomatis
+// bikin earning-nya dikecualikan. Perubahan daftar butuh deploy ulang
+// (sengaja, biar auditable).
 var finExcludedUserEmails = []string{
-	"farihcoid@gmail.com",
-	"wantek@gmail.com",
+	"farihcoid@gmail.com",      // internal/dev
+	"wantek@gmail.com",         // internal/dev
+	"mitra@tauthub.com",        // akun mitra internal (exclude penghasilan)
+	"smoke.test@example.com",   // akun klien smoke-test (exclude transaksi)
 }
 
 // finFilterCtx: ID yang dikecualikan, dihitung sekali per request.
