@@ -248,7 +248,7 @@ func (d *Deps) GSCCallback(w http.ResponseWriter, r *http.Request) {
 	if prow, _ := d.queryRow(r.Context(), "SELECT public_id, id FROM partners WHERE id = $1 LIMIT 1", partnerID); prow != nil {
 		publicID = prow.strOr("public_id", partnerID)
 	}
-	http.Redirect(w, r, appBase+"/mitra/"+publicID+"/kalkulator-media?gsc_connected=1", http.StatusFound)
+	http.Redirect(w, r, appBase+"/mitra/"+publicID+"/pusat-penjual?gsc_connected=1", http.StatusFound)
 }
 
 // appBase: base aplikasi publik (config lalu origin request).

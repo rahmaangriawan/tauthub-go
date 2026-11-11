@@ -13,7 +13,7 @@
 	import { page } from '$app/state';
 		import {
 			ChevronDown, Coins, Gauge, Gift, Headset, House, Link2, MessageCircle, Newspaper, PlugZap,
-			BookOpen, Receipt, ScrollText, Server, Settings, ShieldCheck, TriangleAlert,
+			BookOpen, Receipt, ScrollText, Server, Settings, ShieldCheck, Store, TriangleAlert,
 			UserCircle, Wallet
 		} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, AUTH_EXPIRED_EVENT } from '$lib/auth';
@@ -138,6 +138,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav_partner.group_summary,
 			items: [
 				{ label: i18n.t.nav_partner.overview, href: base, icon: House, active: pathname === base },
+				{ label: tr('Pusat Penjual'), href: `${base}/pusat-penjual`, icon: Store, active: isActive(`${base}/pusat-penjual`) },
 				...(isVvip ? [{ label: i18n.t.nav_partner.vip_dashboard, href: `${base}/vip`, icon: ShieldCheck, active: isActive(`${base}/vip`) }] : [])
 			]
 		},

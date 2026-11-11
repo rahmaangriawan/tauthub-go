@@ -566,6 +566,9 @@ func run() error {
 			authed.Get("/partner/me", partnerDeps.Me)
 			authed.Patch("/partner/me", partnerDeps.MeUpdate)
 			authed.Get("/partner/me/vip", partnerDeps.MeVip)
+			authed.Get("/partner/seller-center", partnerDeps.SellerCenter)
+			authed.Get("/partner/traffic", partnerDeps.Traffic)
+			authed.Post("/partner/media/{mediaId}/gsc-snapshot", partnerDeps.GSCMediaSnapshot)
 
 			authed.Get("/partner/media", partnerDeps.MediaList)
 			authed.Post("/partner/media", partnerDeps.MediaCreate)

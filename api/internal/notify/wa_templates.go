@@ -33,6 +33,7 @@ var WADefaultTemplates = map[string]map[string]string{
 	AudiencePartner: {
 		"publication.partner_approved": "Halo {nama}, publikasi \"{judul}\" telah DISETUJUI mitra dan masuk antrean terbit.\n\nDetail: {link}",
 		"publication.partner_rejected": "Halo {nama}, publikasi \"{judul}\" ditolak.\n\nAlasan: {status}\nDetail: {link}",
+		"seller.order_expiring":        "Halo {nama}, pesanan \"{judul}\" di {media} hampir kedaluwarsa. Sisa waktu: {status}. Setujui sekarang agar tidak dibatalkan otomatis.\n\nBuka: {link}",
 		"publication.published":        "Halo {nama}, artikel \"{judul}\" sudah TERBIT di {media}.\n\nLihat: {link}",
 		"publication.draft_sent":       "Halo {nama}, ada artikel \"{judul}\" dari klien yang dikirim ke {media} sebagai DRAF dan menunggu Anda menerbitkannya.\n\nBuka: {link}",
 		"publication.failed":           "Halo {nama}, publikasi \"{judul}\" gagal diproses.\n\nKeterangan: {status}\nDetail: {link}",
@@ -63,6 +64,7 @@ var WAPreviewLinks = map[string]map[string]string{
 	AudiencePartner: {
 		"publication.partner_approved": "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
 		"publication.partner_rejected": "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
+		"seller.order_expiring":        "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
 		"publication.published":        "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
 		"publication.draft_sent":       "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
 		"publication.failed":           "https://app.tauthub.com/mitra/mitra-contoh/publications?pub=pub-contoh",
@@ -91,6 +93,7 @@ var WALabels = map[string]map[string]string{
 	AudiencePartner: {
 		"publication.partner_approved": "Publikasi disetujui mitra",
 		"publication.partner_rejected": "Publikasi ditolak mitra",
+		"seller.order_expiring":        "Pesanan hampir kedaluwarsa",
 		"publication.published":        "Artikel terbit",
 		"publication.draft_sent":       "Artikel terkirim sebagai draf",
 		"publication.failed":           "Publikasi gagal",

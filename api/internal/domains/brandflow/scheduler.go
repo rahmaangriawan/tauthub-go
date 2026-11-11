@@ -108,6 +108,8 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 
 	// 4. SLA 3×24 jam persetujuan media: lewat tenggat langsung dibatalkan
 	//    otomatis + saldo dikembalikan (tanpa masa perpanjangan).
+	d.schSweepSellerOrderExpiring(ctx, schMinInt(maxJobs, 20))
+	d.schSweepSellerTrafficDrop(ctx, schMinInt(maxJobs, 20))
 	res.SLACancelled = d.schSweepPublicationSLA(ctx, schMinInt(maxJobs, 20))
 
 	// 4a. Perubahan media yang diparkir mitra: pengingat admin 24 jam, batal 48 jam.
@@ -169,6 +171,7 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	d.schEnqueueDomainRechecks(ctx, 5)
 	d.schEnqueueCrawlTargetSyncs(ctx, 5)
 	d.schEnqueuePublicationLinkChecks(ctx, 20)
+	d.schEnqueueGSCSnapshots(ctx, 10)
 	d.schEnqueueMediaAiRefreshes(ctx, 20)
 	// Media aktif tanpa data trafik SimilarWeb otomatis masuk antrean; media
 	// berdata dijeda 6 bulan (lihat schEnqueueSimilarWebChecks).
@@ -1217,6 +1220,172 @@ func (d *Deps) schEnqueuePublicationLinkChecks(ctx context.Context, limit int) {
 		publicationID := row.strOr("id", "")
 		if _, err := d.enqueueJobAt(ctx, "publication_link_check", map[string]any{"publicationId": publicationID}, nil, 2); err != nil {
 			slog.Warn("[scheduler] enqueue link check gagal", "id", publicationID, "err", err)
+		}
+	}
+}
+
+// ---------- Peringatan Pusat Penjual ----------
+
+// schSweepSellerOrderExpiring: pesanan waiting_partner yang tenggat SLA 3x24
+// jam-nya tinggal 24 jam (dan belum lewat) diberi tahu sekali ke mitra lewat
+// in-app, push, dan WhatsApp (kebijakan seller.order_expiring). Tenggat dihitung
+// dari COALESCE(scheduled_at, created_at), sama dengan schSweepSLACancel.
+func (d *Deps) schSweepSellerOrderExpiring(ctx context.Context, limit int) int {
+	if limit < 1 {
+		return 0
+	}
+	rows, err := d.queryRows(ctx, `
+		SELECT p.id, m.name AS media_name, d.title AS document_title,
+		       prt.public_id AS partner_public_id, prt.user_id AS partner_user_id,
+		       COALESCE(p.scheduled_at, p.created_at) + INTERVAL '3 days' AS sla_deadline
+		FROM publications p
+		JOIN media m ON m.id = p.media_id
+		JOIN partners prt ON prt.id = m.partner_id
+		LEFT JOIN content_documents d ON d.id = p.document_id
+		WHERE p.status = 'waiting_partner'
+		  AND COALESCE(p.scheduled_at, p.created_at) + INTERVAL '3 days' > NOW()
+		  AND COALESCE(p.scheduled_at, p.created_at) + INTERVAL '3 days' <= NOW() + INTERVAL '24 hours'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM notifications n
+		    WHERE n.publication_id = p.id AND n.dedupe_key = 'seller.order_expiring:' || p.id
+		  )
+		ORDER BY sla_deadline
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep order hampir kedaluwarsa gagal", "err", err)
+		return 0
+	}
+	sent := 0
+	for _, pub := range rows {
+		userID := pub.strOr("partner_user_id", "")
+		if userID == "" {
+			continue
+		}
+		publicationID := pub.strOr("id", "")
+		article := pub.strOr("document_title", "Artikel")
+		mediaName := pub.strOr("media_name", "media")
+		link := "/mitra/publications?pub=" + publicationID
+		if publicID := pub.strOr("partner_public_id", ""); publicID != "" {
+			link = "/mitra/" + publicID + "/publications?pub=" + publicationID
+		}
+		remaining := "kurang dari 24 jam"
+		if t := schRowTime(pub, "sla_deadline"); t != nil {
+			if left := time.Until(*t); left > 0 {
+				remaining = "sekitar " + itoa(int(left.Hours())+1) + " jam"
+			}
+		}
+		body := "Pesanan \"" + article + "\" di " + mediaName + " belum Anda setujui. Sisa waktu " + remaining +
+			". Lewat tenggat, pesanan dibatalkan otomatis dan tidak ada penghasilan."
+		if !d.insertNotificationOnce(ctx, userID, "seller.order_expiring", "Pesanan hampir kedaluwarsa", body, link,
+			publicationID, "seller.order_expiring:"+publicationID) {
+			continue
+		}
+		sent++
+		notify.EnqueueUserWA(ctx, d.Pool, notify.UserWAOptions{
+			Audience:    notify.AudiencePartner,
+			Event:       "seller.order_expiring",
+			UserID:      userID,
+			ReferenceID: publicationID,
+			Data:        map[string]string{"nama": "", "judul": article, "media": mediaName, "status": remaining},
+			Link:        link,
+			BaseURL:     notify.BaseURL(),
+		})
+	}
+	return sent
+}
+
+// schSweepSellerTrafficDrop: klik Search Console 28 hari turun lebih dari 30
+// persen dari pengambilan sebelumnya (dengan dasar minimal 50 klik, supaya
+// angka kecil tidak memicu alarm) diberi tahu sekali per snapshot ke mitra
+// lewat in-app dan push. Hanya snapshot yang baru (3 hari terakhir) dinilai.
+func (d *Deps) schSweepSellerTrafficDrop(ctx context.Context, limit int) int {
+	if limit < 1 {
+		return 0
+	}
+	rows, err := d.queryRows(ctx, `
+		WITH ranked AS (
+		  SELECT s.id, s.media_id, s.clicks, s.fetched_at,
+		         ROW_NUMBER() OVER (PARTITION BY s.media_id ORDER BY s.fetched_at DESC) AS rn
+		  FROM gsc_snapshots s
+		  WHERE s.media_id IS NOT NULL AND s.period_days = 28 AND s.fetched_at > NOW() - INTERVAL '40 days'
+		)
+		SELECT cur.id AS snapshot_id, cur.clicks AS cur_clicks, prev.clicks AS prev_clicks,
+		       m.name AS media_name, prt.public_id AS partner_public_id, prt.user_id AS partner_user_id
+		FROM ranked cur
+		JOIN ranked prev ON prev.media_id = cur.media_id AND prev.rn = 2
+		JOIN media m ON m.id = cur.media_id
+		JOIN partners prt ON prt.id = m.partner_id
+		WHERE cur.rn = 1 AND cur.fetched_at > NOW() - INTERVAL '3 days'
+		  AND prev.clicks >= 50 AND cur.clicks <= prev.clicks * 0.7
+		  AND NOT EXISTS (
+		    SELECT 1 FROM notifications n
+		    WHERE n.user_id = prt.user_id AND n.dedupe_key = 'seller.traffic_drop:' || cur.id
+		  )
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep penurunan trafik gagal", "err", err)
+		return 0
+	}
+	sent := 0
+	for _, row := range rows {
+		userID := row.strOr("partner_user_id", "")
+		if userID == "" {
+			continue
+		}
+		prev, cur := row.intOr("prev_clicks", 0), row.intOr("cur_clicks", 0)
+		drop := 0
+		if prev > 0 {
+			drop = (prev - cur) * 100 / prev
+		}
+		link := "/mitra/pusat-penjual"
+		if publicID := row.strOr("partner_public_id", ""); publicID != "" {
+			link = "/mitra/" + publicID + "/pusat-penjual"
+		}
+		body := "Klik dari Google ke " + row.strOr("media_name", "situs Anda") + " turun sekitar " + itoa(drop) +
+			"% dibanding pengambilan sebelumnya (" + itoa(prev) + " menjadi " + itoa(cur) +
+			" klik dalam 28 hari). Cek apakah ada artikel yang dihapus, perubahan situs, atau masalah indeks."
+		if err := d.exec(ctx, `
+			INSERT INTO notifications (id, user_id, type, title, body, link, dedupe_key)
+			SELECT gen_random_uuid(), $1, 'seller.traffic_drop', $2, $3, $4, $5
+			WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = $1 AND dedupe_key = $5)`,
+			userID, "Trafik dari Google turun", body, link, "seller.traffic_drop:"+row.strOr("snapshot_id", "")); err != nil {
+			slog.Warn("[scheduler] notifikasi penurunan trafik gagal", "err", err)
+			continue
+		}
+		sent++
+	}
+	return sent
+}
+
+// ---------- 8c-bis. snapshot Search Console mingguan ----------
+
+// schEnqueueGSCSnapshots: untuk media aktif milik mitra yang punya koneksi
+// Search Console aktif dan belum punya snapshot dalam 6 hari terakhir, antre job
+// gsc_snapshot (diproses paket partner). Dedupe job pending/running dan jeda
+// satu hari per media, jadi media yang situsnya tidak ada di properti mitra
+// hanya memicu satu job sehari yang selesai tanpa galat.
+func (d *Deps) schEnqueueGSCSnapshots(ctx context.Context, limit int) {
+	rows, err := d.queryRows(ctx, `
+		SELECT m.id FROM media m
+		WHERE m.status = 'active' AND m.partner_id IS NOT NULL
+		  AND m.website_url IS NOT NULL AND TRIM(m.website_url) <> ''
+		  AND EXISTS (SELECT 1 FROM gsc_connections c WHERE c.partner_id = m.partner_id AND c.status = 'active')
+		  AND NOT EXISTS (SELECT 1 FROM gsc_snapshots s WHERE s.media_id = m.id AND s.fetched_at > NOW() - INTERVAL '6 days')
+		  AND NOT EXISTS (
+		    SELECT 1 FROM jobs j
+		    WHERE j.kind = 'gsc_snapshot' AND j.payload->>'mediaId' = m.id
+		      AND (j.status IN ('pending', 'running') OR j.created_at > NOW() - INTERVAL '1 day')
+		  )
+		ORDER BY m.created_at
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep snapshot GSC gagal", "err", err)
+		return
+	}
+	for _, row := range rows {
+		mediaID := row.strOr("id", "")
+		if _, err := d.enqueueJobAt(ctx, "gsc_snapshot", map[string]any{"mediaId": mediaID}, nil, 2); err != nil {
+			slog.Warn("[scheduler] enqueue snapshot GSC gagal", "media", mediaID, "err", err)
 		}
 	}
 }

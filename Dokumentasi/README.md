@@ -52,6 +52,7 @@ Terakhir diperbarui: 8 November 2026.
 | [Panduan Dashboard Mitra](mitra/README.md) | Peta menu dan panduan menurut tujuan Anda |
 | [Mulai cepat untuk Mitra](mitra/00-mulai-cepat.md) | Dari mendaftar sampai penghasilan pertama cair |
 | [Ringkasan](mitra/01-ringkasan.md) | Beranda Mitra dan pengenalan tampilan dashboard |
+| [Pusat Penjual](mitra/17-pusat-penjual.md) | Tugas harian, pesanan yang menunggu, penghasilan, trafik dari Google, dan kondisi tiap media |
 | [VIP Dashboard](mitra/02-vip-dashboard.md) | Keanggotaan VIP Reguler dan VVIP |
 | [Publikasi](mitra/03-publikasi/README.md) | Memeriksa, menyetujui, dan menerbitkan pesanan artikel |
 | [Daftar Media](mitra/04-daftar-media/README.md) | Mendaftarkan dan mengelola media Anda |

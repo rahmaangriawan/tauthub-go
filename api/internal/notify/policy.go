@@ -131,6 +131,10 @@ var policies = map[string]ChannelPolicy{
 	"publication.guarantee_triggered": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.guarantee_update":    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"partner.guarantee_reversed":      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	// Pusat Penjual: order hampir kedaluwarsa butuh tindakan hari ini (WA segera);
+	// penurunan trafik cukup informasi supaya WhatsApp tidak berisik.
+	"seller.order_expiring": {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
+	"seller.traffic_drop":   {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"media.approved":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
 	"media.rejected":                  {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierInfo},
 	"media.submitted":                 {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
