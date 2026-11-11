@@ -20,10 +20,10 @@ import (
 
 const planBriefAssistPrompt = `Anda membantu klien menyusun rencana artikel media (Bahasa Indonesia).
 Dari catatan singkat klien, keluarkan JSON saja dengan kunci:
-- "brief": string, satu paragraf maksimal 120 kata: apa yang dijual dan manfaat utamanya, untuk siapa, pesan utama, dan sudut topik untuk beberapa artikel.
+- "brief": string, satu paragraf maksimal 120 kata DITULIS DALAM SUDUT PANDANG ORANG PERTAMA (saya / kami), seolah klien sendiri yang bercerita. Contoh: "Saya ingin mempromosikan event maraton..." BUKAN "Klien membutuhkan...". Isinya: apa yang saya jual atau promosikan dan manfaat utamanya, untuk siapa, pesan utama, dan sudut topik untuk beberapa artikel.
 - "category": string kategori media yang paling cocok (mis. "Ekonomi", "Gaya Hidup", "Teknologi", "Kesehatan", "Otomotif", "Properti", "Pendidikan", "Umum") atau "" bila tidak jelas.
 - "weeks": angka bulat 1 sampai 8, jumlah minggu. Pakai angka yang disebut klien; bila tidak disebut, sarankan 4.
-- "per_week": angka bulat 1 sampai 3, artikel per minggu. Pakai angka yang disebut; bila tidak disebut, sarankan 1.
+- "per_week": angka bulat 1 sampai 3, artikel per minggu. Pakai angka yang disebut; bila tidak disebut, sesuaikan dengan cakupan: 1 untuk kampanye sederhana, 2 atau 3 bila klien menyebut banyak topik atau jadwal sebelum dan sesudah acara.
 - "budget_idr": angka rupiah total anggaran HANYA bila klien menyebut nominal uang secara eksplisit; bila tidak, null.
 Aturan keras: jangan menambah fakta, angka, harga, klaim, nama perusahaan, atau testimoni yang tidak ada di catatan. Jangan mengarang anggaran.`
 
@@ -126,6 +126,10 @@ func (d *Deps) PlanBriefAssist(w http.ResponseWriter, r *http.Request) {
 			rate = 1000
 		}
 		cands, cErr := d.planCandidates(r.Context(), category)
+		if cErr == nil && len(cands) == 0 && category != "" {
+			// Kategori dari AI tidak punya media: pakai semua media yang bisa dipesan.
+			cands, cErr = d.planCandidates(r.Context(), "")
+		}
 		if cErr == nil && len(cands) > 0 {
 			sumTC := 0
 			for _, c := range cands {
