@@ -241,6 +241,13 @@ var catalog = []TemplateEvent{
 			pg("Balas lewat halaman Pesan agar seluruh percakapan tetap tercatat di satu tempat."),
 			cta("Buka Pesan"),
 		)),
+	directEntry(AudienceClient, "report.monthly", "Laporan bulanan", "Laporan bulanan {brand}",
+		body(
+			pg("Berikut ringkasan aktivitas brand Anda bulan ini."),
+			pg("{isi}"),
+			cta("Buka dashboard"),
+		)),
+
 	genericEntry(AudienceClient, "secure_direct.requested", "Permintaan akses aman", "Permintaan akses data aman",
 		body(
 			pg("Permintaan akses data aman tercatat di akun Anda."),

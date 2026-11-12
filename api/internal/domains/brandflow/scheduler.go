@@ -50,6 +50,7 @@ type SchedulerResult struct {
 	JobsProcessed               int   `json:"jobs_processed"`
 	RetentionDeleted            int64 `json:"retention_deleted"`
 	RetentionArchived           int64 `json:"retention_archived"`
+	MonthlyReportsSent          int   `json:"monthly_reports_sent"`
 }
 
 // toMap: bentuk respons JSON (parity nama field snake_case app lama).
@@ -71,6 +72,7 @@ func (r SchedulerResult) toMap() map[string]any {
 		"jobs_processed":                 r.JobsProcessed,
 		"retention_deleted":              r.RetentionDeleted,
 		"retention_archived":             r.RetentionArchived,
+		"monthly_reports_sent":           r.MonthlyReportsSent,
 	}
 }
 
@@ -223,6 +225,9 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 			}
 		}
 	}
+
+	// 10c. Laporan bulanan: ringkasan kampanye bulan lalu ke email admin brand.
+	res.MonthlyReportsSent = d.schSweepMonthlyReport(ctx, schMinInt(maxJobs, 20))
 
 	// 11. Ringkasan brief: lepaskan baris yang macet 'queued'/'running' tanpa
 	//     job hidup (proses pemiliknya mati saat deploy) supaya UI klien tidak

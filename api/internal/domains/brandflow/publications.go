@@ -1609,7 +1609,7 @@ func (d *Deps) PublicationReplacementGet(w http.ResponseWriter, r *http.Request)
 	if price, ok := pub.num("client_price"); ok && price > 0 {
 		budget = &price
 	}
-	candidates, err := d.bsRecommendMedia(r.Context(), pub.strOr("category", ""), budget, 10, exclude)
+	candidates, err := d.bsRecommendMedia(r.Context(), brandID, pub.strOr("category", ""), budget, 10, exclude)
 	if err != nil {
 		d.writeErr(w, err)
 		return

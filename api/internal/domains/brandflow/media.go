@@ -22,10 +22,12 @@ func (d *Deps) MediaRecommendations(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	if _, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer"); err != nil {
+	bfBrand, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
+	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
+	brandID := bfBrand.ID
 	q := r.URL.Query()
 	category := strings.TrimSpace(q.Get("category"))
 	var budget *float64
@@ -46,12 +48,18 @@ func (d *Deps) MediaRecommendations(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	recommendations, err := d.bsRecommendMedia(r.Context(), category, budget, count, exclude)
+	hist := d.bsLoadBrandMediaHistory(r.Context(), brandID)
+	if !hist.HasHistory {
+		writeJSON(w, http.StatusOK, map[string]any{"recommendations": []any{}, "has_history": false})
+		return
+	}
+
+	recommendations, err := d.bsRecommendMedia(r.Context(), brandID, category, budget, count, exclude)
 	if err != nil {
 		d.writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"recommendations": recommendations})
+	writeJSON(w, http.StatusOK, map[string]any{"recommendations": recommendations, "has_history": true})
 }
 
 // mediaRecommendationRow: parity MediaRecommendation.
@@ -61,9 +69,60 @@ type mediaRecommendationRow struct {
 	Health *float64
 }
 
-// bsRecommendMedia: port recommendMedia (skor budget/health/kategori/kinerja
-// + shuffle pool teratas).
-func (d *Deps) bsRecommendMedia(ctx context.Context, category string, budget *float64, count int, excludeIDs []string) ([]map[string]any, error) {
+// brandMediaHistory: riwayat publikasi sukses sebuah brand.
+type brandMediaHistory struct {
+	UsedMediaIDs map[string]int // media_id → jumlah publikasi sukses
+	Categories   map[string]bool
+	Tiers        map[string]bool
+	AvgPrice     float64
+	HasHistory   bool
+}
+
+// bsLoadBrandMediaHistory: query riwayat publikasi sukses brand.
+func (d *Deps) bsLoadBrandMediaHistory(ctx context.Context, brandID string) brandMediaHistory {
+	h := brandMediaHistory{
+		UsedMediaIDs: map[string]int{},
+		Categories:   map[string]bool{},
+		Tiers:        map[string]bool{},
+	}
+	if brandID == "" {
+		return h
+	}
+	rows, err := d.queryRows(ctx, `
+		SELECT m.id AS media_id, m.category, m.media_tier, m.price,
+		       COUNT(*)::int AS pub_count
+		FROM publications p
+		JOIN media m ON m.id = p.media_id
+		WHERE p.brand_id = $1 AND p.status = 'published'
+		GROUP BY m.id, m.category, m.media_tier, m.price`, brandID)
+	if err != nil || len(rows) == 0 {
+		return h
+	}
+	h.HasHistory = true
+	totalPrice := 0.0
+	for _, r := range rows {
+		mid := r.strOr("media_id", "")
+		h.UsedMediaIDs[mid] = r.intOr("pub_count", 0)
+		if cat := r.strOr("category", ""); cat != "" {
+			h.Categories[strings.ToLower(cat)] = true
+		}
+		if tier := r.strOr("media_tier", ""); tier != "" {
+			h.Tiers[strings.ToLower(tier)] = true
+		}
+		totalPrice += r.numOr("price") * float64(r.intOr("pub_count", 1))
+	}
+	totalPubs := 0
+	for _, c := range h.UsedMediaIDs {
+		totalPubs += c
+	}
+	if totalPubs > 0 {
+		h.AvgPrice = totalPrice / float64(totalPubs)
+	}
+	return h
+}
+
+// bsRecommendMedia: rekomendasi media dengan personalisasi riwayat brand.
+func (d *Deps) bsRecommendMedia(ctx context.Context, brandID string, category string, budget *float64, count int, excludeIDs []string) ([]map[string]any, error) {
 	count = bsNumClampInt(float64(count), 1, 50)
 	if budget != nil && *budget <= 0 {
 		budget = nil
@@ -74,8 +133,10 @@ func (d *Deps) bsRecommendMedia(ctx context.Context, category string, budget *fl
 		exclude[id] = true
 	}
 
+	hist := d.bsLoadBrandMediaHistory(ctx, brandID)
+
 	rows, err := d.queryRows(ctx, `
-		SELECT m.id, m.name, m.slug, m.category, m.website_url, m.price, m.credit_cost,
+		SELECT m.id, m.name, m.slug, m.category, m.media_tier, m.website_url, m.price, m.credit_cost,
 		       m.integration_type, m.health_score, m.traffic_estimate, m.status, m.dewan_pers_verified,
 		       COALESCE(stats.pub_count, 0)::int AS pub_count,
 		       COALESCE(stats.rej_count, 0)::int AS rej_count
@@ -116,28 +177,29 @@ func (d *Deps) bsRecommendMedia(ctx context.Context, category string, budget *fl
 			penalty = 15
 		}
 
-		budgetFit := 40.0
+		// --- skor dasar ---
+		budgetFit := 25.0
 		var fit string
 		switch {
 		case budget == nil:
-			budgetFit = 40
+			budgetFit = 25
 		case price <= *budget:
-			cap := 15.0
+			cap := 10.0
 			if *budget != 0 {
-				cap = math.Min(15, (price / *budget)*15)
+				cap = math.Min(10, (price / *budget)*10)
 			}
-			budgetFit = 40 - cap
+			budgetFit = 25 - cap
 		default:
-			budgetFit = 10
+			budgetFit = 6
 		}
 
-		healthFit := 18.0
+		healthFit := 12.0
 		if health != nil {
-			healthFit = (*health / 100) * 30
+			healthFit = (*health / 100) * 20
 		}
-		categoryFit := 10.0
+		categoryFit := 8.0
 		if cat != "" && strings.EqualFold(row.strOr("category", ""), cat) {
-			categoryFit = 20
+			categoryFit = 15
 		}
 		perf := 0.0
 		if traffic > 0 {
@@ -145,9 +207,45 @@ func (d *Deps) bsRecommendMedia(ctx context.Context, category string, budget *fl
 		}
 		perf += math.Min(7, float64(published)*2+traffic/100000)
 		performanceFit := math.Min(10, perf)
-		total := math.Max(0, math.Round(budgetFit+healthFit+categoryFit+performanceFit-penalty))
+
+		// --- sinyal riwayat brand ---
+		histCatFit := 0.0
+		histTierFit := 0.0
+		histPriceFit := 0.0
+		histUsedFit := 0.0
+
+		if hist.HasHistory {
+			mediaCat := strings.ToLower(row.strOr("category", ""))
+			if mediaCat != "" && hist.Categories[mediaCat] {
+				histCatFit = 10
+			}
+			mediaTier := strings.ToLower(row.strOr("media_tier", ""))
+			if mediaTier != "" && hist.Tiers[mediaTier] {
+				histTierFit = 5
+			}
+			if hist.AvgPrice > 0 && price > 0 {
+				ratio := price / hist.AvgPrice
+				if ratio >= 0.5 && ratio <= 1.5 {
+					histPriceFit = 5
+				}
+			}
+			if _, used := hist.UsedMediaIDs[id]; used {
+				histUsedFit = 10
+			}
+		}
+
+		total := math.Max(0, math.Round(budgetFit+healthFit+categoryFit+performanceFit+histCatFit+histTierFit+histPriceFit+histUsedFit-penalty))
 
 		reasons := []string{}
+		if histUsedFit > 0 {
+			reasons = append(reasons, "Pernah Anda gunakan dan terbit sukses")
+		}
+		if histCatFit > 0 {
+			reasons = append(reasons, "Cocok dengan kategori kampanye sebelumnya")
+		}
+		if histPriceFit > 0 {
+			reasons = append(reasons, "Harga serupa dengan pesanan sebelumnya")
+		}
 		if budget != nil && price <= *budget {
 			reasons = append(reasons, "Sesuai budget ("+bsIntlIDR(price)+")")
 		}
@@ -172,9 +270,13 @@ func (d *Deps) bsRecommendMedia(ctx context.Context, category string, budget *fl
 		}
 
 		switch {
-		case budgetFit < 20:
+		case histUsedFit > 0:
+			fit = "history"
+		case histCatFit > 0:
+			fit = "history_category"
+		case budgetFit < 12:
 			fit = "budget"
-		case categoryFit == 20:
+		case categoryFit == 15:
 			fit = "category"
 		case health != nil && *health >= 70:
 			fit = "health"
@@ -215,32 +317,11 @@ func (d *Deps) bsRecommendMedia(ctx context.Context, category string, budget *fl
 	}
 
 	limit := count
-	if len(scored) <= count {
-		out := make([]map[string]any, 0, len(scored))
-		for _, item := range scored {
-			out = append(out, item.Fields)
-		}
-		return out, nil
-	}
-	// Randomize/shuffle pool teratas (parity Math.random Fisher-Yates).
-	poolSize := len(scored)
-	if count*3 > 15 {
-		if count*3 < poolSize {
-			poolSize = count * 3
-		}
-	} else if 15 < poolSize {
-		poolSize = 15
-	}
-	topPool := append([]mediaRecommendationRow{}, scored[:poolSize]...)
-	for i := len(topPool) - 1; i > 0; i-- {
-		j := bsRandInt(i + 1)
-		topPool[i], topPool[j] = topPool[j], topPool[i]
-	}
-	if limit > len(topPool) {
-		limit = len(topPool)
+	if limit > len(scored) {
+		limit = len(scored)
 	}
 	out := make([]map[string]any, 0, limit)
-	for _, item := range topPool[:limit] {
+	for _, item := range scored[:limit] {
 		out = append(out, item.Fields)
 	}
 	return out, nil
@@ -621,10 +702,3 @@ func (d *Deps) PackagesList(w http.ResponseWriter, r *http.Request) {
 
 // ---------- util ----------
 
-// bsRandInt: angka acak [0,n) memakai math/rand (determinisme tidak dituntut).
-func bsRandInt(n int) int {
-	if n <= 0 {
-		return 0
-	}
-	return randInt(n)
-}

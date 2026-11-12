@@ -22,7 +22,7 @@
 	let tab = $state<'akun' | 'notifikasi' | 'keamanan'>('akun');
 
 	let user = $state<AuthUser | null>(null);
-	let notif = $state({ wa_number: '', wa_consent: false });
+	let notif = $state({ wa_number: '', wa_consent: false, monthly_report_optout: false });
 	let password = $state({ current: '', next: '' });
 	// Pesan gagal ganti password ditampilkan merah di bawah form (bukan banner
 	// atas), mis. password saat ini tidak cocok. Dikosongkan saat user mengetik.
@@ -109,7 +109,7 @@
 		const prefs = await apiRequest('/v1/me/notification-preferences');
 		if (prefs.ok) {
 			const d = await prefs.json();
-			notif = { wa_number: d.wa_number ?? '', wa_consent: Boolean(d.wa_consent) };
+			notif = { wa_number: d.wa_number ?? '', wa_consent: Boolean(d.wa_consent), monthly_report_optout: Boolean(d.monthly_report_optout) };
 		}
 	}
 
@@ -123,7 +123,7 @@
 		await withBusy(async () => {
 			const res = await apiRequest('/v1/me/notification-preferences', {
 				method: 'PUT',
-				body: JSON.stringify({ wa_number: notif.wa_number, wa_consent: notif.wa_consent })
+				body: JSON.stringify({ wa_number: notif.wa_number, wa_consent: notif.wa_consent, monthly_report_optout: notif.monthly_report_optout })
 			});
 			msg = res.ok ? 'Preferensi notifikasi tersimpan.' : await readApiError(res, tr('Gagal menyimpan preferensi.'));
 		});
@@ -303,6 +303,13 @@
 					<input type="checkbox" bind:checked={notif.wa_consent} />
 					Setuju dihubungi via WhatsApp
 				</label>
+			</div>
+			<div class="pf-grid2" style="margin-top:12px;">
+				<label class="pf-check">
+					<input type="checkbox" bind:checked={notif.monthly_report_optout} />
+					{tr("Jangan kirim laporan bulanan via email")}
+				</label>
+				<p class="text-xs text-muted-foreground">{tr("Laporan ringkasan kampanye bulanan dikirim otomatis ke email Anda. Centang untuk berhenti menerima.")}</p>
 			</div>
 			<!-- Simpan hanya bisa saat kotak persetujuan WhatsApp dicentang. -->
 			<button class="app-btn app-btn-primary pf-action" type="submit" disabled={busy || !notif.wa_consent}>{tr("Simpan preferensi")}</button>

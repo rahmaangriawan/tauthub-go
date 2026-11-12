@@ -224,21 +224,23 @@ func (d *Deps) NotificationPreferencesGet(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var waNumber, emailAlt1, emailAlt2 *string
-	var waConsent bool
+	var waConsent, monthlyReportOptout bool
 	err := d.Pool.QueryRow(r.Context(),
-		"SELECT wa_number, wa_consent, email_alt1, email_alt2 FROM notification_preferences WHERE user_id = $1 LIMIT 1",
-		user.ID).Scan(&waNumber, &waConsent, &emailAlt1, &emailAlt2)
+		"SELECT wa_number, wa_consent, email_alt1, email_alt2, COALESCE(monthly_report_optout, false) FROM notification_preferences WHERE user_id = $1 LIMIT 1",
+		user.ID).Scan(&waNumber, &waConsent, &emailAlt1, &emailAlt2, &monthlyReportOptout)
 	resp := map[string]any{
-		"wa_number":  "",
-		"wa_consent": false,
-		"email_alt1": "",
-		"email_alt2": "",
+		"wa_number":              "",
+		"wa_consent":             false,
+		"email_alt1":             "",
+		"email_alt2":             "",
+		"monthly_report_optout":  false,
 	}
 	if err == nil {
 		if waNumber != nil {
 			resp["wa_number"] = *waNumber
 		}
 		resp["wa_consent"] = waConsent
+		resp["monthly_report_optout"] = monthlyReportOptout
 		if emailAlt1 != nil {
 			resp["email_alt1"] = *emailAlt1
 		}
@@ -257,8 +259,9 @@ func (d *Deps) NotificationPreferencesPut(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var body struct {
-		WaNumber  *string `json:"wa_number"`
-		WaConsent *bool   `json:"wa_consent"`
+		WaNumber            *string `json:"wa_number"`
+		WaConsent           *bool   `json:"wa_consent"`
+		MonthlyReportOptout *bool   `json:"monthly_report_optout"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpx.Error(w, http.StatusUnprocessableEntity, "Payload tidak valid")
@@ -276,14 +279,19 @@ func (d *Deps) NotificationPreferencesPut(w http.ResponseWriter, r *http.Request
 	if waNumber != "" {
 		waNumberVal = &waNumber
 	}
+	monthlyOptout := false
+	if body.MonthlyReportOptout != nil {
+		monthlyOptout = *body.MonthlyReportOptout
+	}
 	if _, err := d.Pool.Exec(r.Context(), `
-		INSERT INTO notification_preferences (user_id, wa_number, wa_consent, created_at, updated_at)
-		VALUES ($1, $2, $3, NOW(), NOW())
+		INSERT INTO notification_preferences (user_id, wa_number, wa_consent, monthly_report_optout, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
 		ON CONFLICT (user_id) DO UPDATE SET
 		  wa_number = EXCLUDED.wa_number,
 		  wa_consent = EXCLUDED.wa_consent,
+		  monthly_report_optout = EXCLUDED.monthly_report_optout,
 		  updated_at = NOW()`,
-		user.ID, waNumberVal, *body.WaConsent); err != nil {
+		user.ID, waNumberVal, *body.WaConsent, monthlyOptout); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, httpx.Scrub500(d.Cfg.AppEnv, err.Error()))
 		return
 	}

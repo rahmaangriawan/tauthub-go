@@ -345,6 +345,31 @@
 	// dipilih lagi karena akan dibuat sebagai artikel baru.
 	let newRoundMode = $state(false);
 
+	// --- Rekomendasi media personal ---
+	type Recommendation = {
+		id: string; name: string; slug?: string; category: string | null;
+		website_url?: string | null;
+		price: number; credit_cost: number; health_score: number | null;
+		score: number; reasons: string[]; fit: string;
+		is_available: boolean; dewan_pers_verified?: boolean;
+	};
+	let recommendations = $state<Recommendation[]>([]);
+	let recsHasHistory = $state(false);
+	let recsLoading = $state(true);
+
+	async function loadRecommendations() {
+		recsLoading = true;
+		try {
+			const res = await apiRequest(`${apiBase}/media/recommendations?count=6`);
+			if (res.ok) {
+				const data = await res.json();
+				recsHasHistory = data.has_history !== false;
+				recommendations = recsHasHistory ? (data.recommendations ?? []) as Recommendation[] : [];
+			}
+		} catch { /* silent */ }
+		recsLoading = false;
+	}
+
 	const BOOKMARK_KEY = 'tauthub_client_bookmarked_media';
 	const SELECTED_KEY = 'tauthub_client_selected_media';
 
@@ -690,6 +715,7 @@
 			else restoreSelection();
 			selectionHydrated = true;
 			void loadWallet();
+			void loadRecommendations();
 		})();
 		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -1408,6 +1434,38 @@
 			<Zap size={14} />
 			<span>{tr('Pilih media untuk kampanyemu — setelah ini kamu diarahkan ke produksi artikel: judul, cover, pemeriksaan mutu, lalu terbit ke media.')}</span>
 		</div>
+	{/if}
+
+	<!-- Rekomendasi media personal -->
+	{#if !recsLoading && recsHasHistory && recommendations.length > 0 && !addToCampaignId}
+		<section class="recsSection">
+			<span class="recsLabel">{tr('Rekomendasi untuk Anda')}</span>
+			<div class="recsScroll">
+				{#each recommendations as rec (rec.id)}
+					{@const favDomain = (() => { try { if (rec.website_url) return new URL(rec.website_url.startsWith('http') ? rec.website_url : 'https://' + rec.website_url).hostname; } catch {} return rec.name.includes('.') ? rec.name : ''; })()}
+					<button
+						class="recChip"
+						type="button"
+						onclick={() => {
+							const found = rows.find(m => m.id === rec.id);
+							if (found) detail = found;
+						}}
+					>
+						{#if favDomain}
+							<img
+								class="recFav"
+								src="https://www.google.com/s2/favicons?domain={encodeURIComponent(favDomain)}&sz=32"
+								alt=""
+								width="16"
+								height="16"
+								onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+							/>
+						{/if}
+						<span class="recChipName">{rec.name}</span>
+					</button>
+				{/each}
+			</div>
+		</section>
 	{/if}
 
 	<!-- Top Search & Filter Bar -->
@@ -2994,5 +3052,54 @@
 			border-radius: 6px;
 			padding: 1px 7px;
 			font-size: 11.5px;
+		}
+		/* --- Rekomendasi media personal --- */
+		.recsSection {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 6px 4px;
+			overflow: hidden;
+		}
+		.recsLabel {
+			font-size: 12px;
+			font-weight: 600;
+			color: var(--muted-foreground);
+			white-space: nowrap;
+			flex-shrink: 0;
+		}
+		.recsScroll {
+			display: flex;
+			gap: 6px;
+			overflow-x: auto;
+			scrollbar-width: none;
+		}
+		.recsScroll::-webkit-scrollbar { display: none; }
+		.recChip {
+			flex: 0 0 auto;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			padding: 4px 10px;
+			border: 1px solid var(--border, #e2e8f0);
+			border-radius: 6px;
+			background: var(--card, #fff);
+			cursor: pointer;
+			transition: border-color 0.15s;
+			white-space: nowrap;
+		}
+		.recChip:hover {
+			border-color: var(--primary, #2563eb);
+		}
+		.recFav {
+			width: 16px;
+			height: 16px;
+			border-radius: 2px;
+			flex-shrink: 0;
+		}
+		.recChipName {
+			font-size: 12.5px;
+			font-weight: 500;
+			color: var(--foreground);
 		}
 </style>
