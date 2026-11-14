@@ -550,6 +550,7 @@ func run() error {
 		v1.Get("/public/media/{publicSlug}", publicCatalog.MediaDetail)
 		v1.Get("/public/kategori", publicCatalog.Categories)
 		v1.Get("/public/statistik", publicCatalog.Stats)
+		v1.Get("/public/simulasi", publicCatalog.Simulate)
 		v1.Get("/public/sitemap", publicCatalog.Sitemap)
 		// Endpoint publik & infra (§7): feed JSON mitra, tracking event, callback
 		// publishing, laporan bug (butuh login), trigger worker/scheduler.

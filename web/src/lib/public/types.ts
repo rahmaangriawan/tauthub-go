@@ -65,3 +65,28 @@ export type PublicList = {
 	limit: number;
 	pages: number;
 };
+
+export type SimMedia = {
+	slug: string;
+	name: string;
+	url: string;
+	domain: string;
+	tier: string | null;
+	da: number | null;
+	traffic: number | null;
+	price: number;
+};
+
+export type SimPackage = {
+	key: 'hemat' | 'seimbang' | 'premium';
+	label: string;
+	summary: string;
+	items: SimMedia[];
+	count: number;
+	total: number;
+	leftover: number;
+	avg_da: number | null;
+	traffic_total: number;
+};
+
+export type SimResult = { budget: number; candidates: number; packages: SimPackage[] };

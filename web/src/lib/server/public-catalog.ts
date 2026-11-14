@@ -8,7 +8,7 @@
 import { env } from '$env/dynamic/private';
 import { catalogEnabled } from './data-site';
 import { randomShuffleSeed, seededShuffle } from '$lib/media/shuffle';
-import type { PublicCategory, PublicList, PublicMedia, PublicStats } from '$lib/public/types';
+import type { PublicCategory, PublicList, PublicMedia, PublicStats, SimResult } from '$lib/public/types';
 
 const API_URL = env.API_URL ?? 'http://localhost:8080';
 
@@ -147,4 +147,9 @@ export function hasActiveFilters(url: URL): boolean {
 		const v = url.searchParams.get(k);
 		return v !== null && v !== '' && !(k === 'page' && v === '1');
 	});
+}
+
+/** Simulasi paket: tiga paket contoh dari media publik untuk satu anggaran. */
+export async function fetchSimulation(fetch: Fetch, params: URLSearchParams): Promise<SimResult | null> {
+	return apiGet<SimResult>(fetch, `/v1/public/simulasi?${params.toString()}`);
 }

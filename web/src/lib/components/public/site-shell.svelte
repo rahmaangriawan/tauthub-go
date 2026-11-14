@@ -28,6 +28,7 @@
 				<span class="pub-brand-tag">Data</span>
 			</a>
 			<nav class="pub-nav" aria-label="Navigasi katalog">
+				<a class="pub-nav-link" href="/simulasi">Simulasi paket</a>
 				<a class="pub-btn pub-btn-primary" href={loginHref}>Masuk / Daftar</a>
 			</nav>
 		</div>

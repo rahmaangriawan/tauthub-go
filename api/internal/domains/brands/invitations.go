@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	emailqueue "github.com/rahmaangriawan/tauthub-go/internal/email"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
 )
@@ -48,6 +49,34 @@ func maskEmail(email string) string {
 // sama dengan mengirim ulang dan tautan lama mati.
 func (d *Deps) inviteByEmail(w http.ResponseWriter, r *http.Request, brand BrandRow, actorID, email, role string) {
 	ctx := r.Context()
+
+	// Pagar yang sama dengan pendaftaran: undangan ke alamat yang belum terdaftar
+	// juga mengirim email, jadi tidak boleh jadi jalan pintas untuk menjebol SMTP.
+	if !auth.GmailLocalPartValid(email) {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Alamat Gmail ini tidak valid. Periksa lagi penulisannya (hanya huruf, angka, dan titik).")
+		return
+	}
+	if emailqueue.IsSuppressed(ctx, d.Pool, email) {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Alamat email ini tidak bisa dikirimi (pernah memantul). Minta anggota memakai alamat lain.")
+		return
+	}
+	// Batas per pengirim (bukan per IP), per brand, dan per alamat tujuan.
+	for _, g := range []struct {
+		bucket string
+		max    int
+		window int
+	}{
+		{"invite:actor1h:" + actorID, 20, 3600},
+		{"invite:actor1d:" + actorID, 60, 86400},
+		{"invite:brand1d:" + brand.ID, 100, 86400},
+		{"invite:to1d:" + email, 3, 86400},
+	} {
+		if err := auth.CheckRate(ctx, d.Pool, g.bucket, g.max, g.window); err != nil {
+			httpx.Error(w, http.StatusTooManyRequests, "Terlalu banyak undangan dikirim. Coba lagi nanti.")
+			return
+		}
+	}
+
 	token, err := newInviteToken()
 	if err != nil {
 		writeError(w, err)

@@ -73,7 +73,7 @@ export function isAppOnlyPath(pathname: string): boolean {
 // robots.txt/sitemap.xml sengaja TIDAK termasuk: keduanya harus dilayani di
 // host masing-masing dengan aturan berbeda.
 export function isCatalogPath(pathname: string): boolean {
-	return pathname.startsWith('/media') || pathname.startsWith('/kategori');
+	return pathname.startsWith('/media') || pathname.startsWith('/kategori') || pathname.startsWith('/simulasi');
 }
 
 export type SeoMeta = {
