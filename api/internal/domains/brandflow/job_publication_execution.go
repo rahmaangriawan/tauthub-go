@@ -1414,7 +1414,7 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 	_ = d.exec(ctx, "UPDATE publication_jobs SET progress = 45 WHERE id = $1", jobID)
 	if needsFeatured {
 		imageURL := bsStringifyAny(defaults["featured_image_url"])
-		mediaID := d.peUploadFeaturedImage(ctx, baseURL, headers, imageURL, document.strOr("title", ""))
+		mediaID, uploadErr := d.peUploadFeaturedImage(ctx, baseURL, headers, imageURL, document.strOr("title", ""))
 		if mediaID > 0 {
 			resolved["featured_media"] = mediaID
 		} else if coverSoft, _ := snapshot["cover_soft"].(bool); coverSoft {
@@ -1424,8 +1424,7 @@ func (d *Deps) peResolveWordPressDefaults(ctx context.Context, connection, media
 				"Gambar cover fallback tidak bisa diunggah ke media mitra (" + imageURL + "), artikel terbit tanpa gambar utama.",
 			})
 		} else {
-			reason := "Gambar cover artikel tidak bisa diunggah ke WordPress (" + imageURL + "). " +
-				"Publikasi dihentikan sebelum terbit — periksa file/URL cover lalu coba lagi."
+			reason := peFeaturedImageFailureReason(imageURL, connection.strOr("username", ""), uploadErr)
 			_ = d.exec(ctx, "UPDATE publication_jobs SET error_message = $1 WHERE id = $2", truncateString(reason, 500), jobID)
 			return pePublishErr("featured_image_upload_failed", reason)
 		}
@@ -1940,18 +1939,39 @@ func (d *Deps) peUploadMedia(ctx context.Context, baseURL string, headers map[st
 // peUploadFeaturedImage: parity uploadFeaturedImage — balikan 0 (skip) pada
 // kegagalan supaya masalah thumbnail tidak menggagalkan publikasi. Namun
 // pemanggil memperlakukan 0 sebagai kegagalan bila artikel punya cover.
-func (d *Deps) peUploadFeaturedImage(ctx context.Context, baseURL string, headers map[string]string, imageURL, friendlyName string) int {
+func (d *Deps) peUploadFeaturedImage(ctx context.Context, baseURL string, headers map[string]string, imageURL, friendlyName string) (int, error) {
 	file, err := d.peFetchUploadBytes(ctx, imageURL)
 	if err != nil {
 		slog.Warn("[brandflow] cover tidak bisa dibaca untuk diunggah", "url", imageURL, "err", err)
-		return 0
+		return 0, err
 	}
 	id, _, err := d.peUploadMedia(ctx, baseURL, headers, file, friendlyName)
 	if err != nil {
 		slog.Warn("[brandflow] upload featured image gagal", "url", imageURL, "err", err)
-		return 0
+		return 0, err
 	}
-	return id
+	return id, nil
+}
+
+// peFeaturedImageFailureReason: pesan kegagalan cover yang menyebut penyebab
+// sebenarnya. WordPress yang menolak akun (401/403) bukan masalah file cover,
+// jadi mitra diarahkan memperbaiki kredensial, bukan memeriksa gambar.
+func peFeaturedImageFailureReason(imageURL, username string, err error) string {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	if strings.Contains(msg, "(HTTP 401)") || strings.Contains(msg, "(HTTP 403)") {
+		who := "akun WordPress mitra"
+		if username != "" {
+			who = "akun WordPress \"" + username + "\""
+		}
+		return "Situs WordPress menolak " + who + " saat mengunggah gambar cover (" + msg + "). " +
+			"Ini masalah kredensial atau izin, bukan file cover. Mitra perlu membuat Application Password baru " +
+			"atau memberi akun peran Author/Editor, lalu tes ulang koneksi di halaman Integrasi."
+	}
+	return "Gambar cover artikel tidak bisa diunggah ke WordPress (" + imageURL + "): " + msg + ". " +
+		"Publikasi dihentikan sebelum terbit — periksa file/URL cover lalu coba lagi."
 }
 
 // peUploadInlineImages: unggah tiap gambar /uploads di badan artikel ke media
