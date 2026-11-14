@@ -1468,6 +1468,13 @@ func (d *Deps) schSweepMediaAiSummaries(ctx context.Context, limit int) {
 	if delayDays < 0 {
 		delayDays = 0
 	}
+	// Jeda setelah job gagal: tanpa ini, media yang gagal (mis. provider AI
+	// sedang 429/5xx) langsung dipilih lagi di putaran berikutnya. Pernah
+	// menghasilkan ~228 job gagal per media dalam dua jam (~914 panggilan AI).
+	cooldownHours := schEnvInt("MEDIA_AI_SUMMARY_RETRY_COOLDOWN_HOURS", 3)
+	if cooldownHours < 1 {
+		cooldownHours = 1
+	}
 
 	candidates, err := d.queryRows(ctx, `
 		SELECT DISTINCT ON (RTRIM(REGEXP_REPLACE(LOWER(TRIM(m.website_url)), '^(https?://)?(www\.)?', ''), '/'))
@@ -1479,8 +1486,9 @@ func (d *Deps) schSweepMediaAiSummaries(ctx context.Context, limit int) {
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'media_ai_summary'
-		      AND j.status IN ('pending','running')
 		      AND j.payload->>'mediaId' = m.id::text
+		      AND (j.status IN ('pending','running')
+		           OR (j.status = 'failed' AND j.updated_at > NOW() - make_interval(hours => $3::int)))
 		  )
 		  AND NOT EXISTS (
 		    SELECT 1 FROM media m2
@@ -1490,12 +1498,13 @@ func (d *Deps) schSweepMediaAiSummaries(ctx context.Context, limit int) {
 		      AND (m2.ai_summary IS NOT NULL OR EXISTS (
 		        SELECT 1 FROM jobs j2
 		        WHERE j2.kind = 'media_ai_summary'
-		          AND j2.status IN ('pending','running')
 		          AND j2.payload->>'mediaId' = m2.id::text
+		          AND (j2.status IN ('pending','running')
+		               OR (j2.status = 'failed' AND j2.updated_at > NOW() - make_interval(hours => $3::int)))
 		      ))
 		  )
 		ORDER BY RTRIM(REGEXP_REPLACE(LOWER(TRIM(m.website_url)), '^(https?://)?(www\.)?', ''), '/'), m.created_at ASC
-		LIMIT $2`, delayDays, limit)
+		LIMIT $2`, delayDays, limit, cooldownHours)
 	if err != nil {
 		slog.Error("[scheduler] sweep kesimpulan AI gagal", "err", err)
 		return
