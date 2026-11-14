@@ -388,7 +388,7 @@ func (d *Deps) CampaignFlowMedia(w http.ResponseWriter, r *http.Request) {
 		existingSet[row.strOr("media_id", "")] = true
 	}
 
-	costs := d.creditCostsForMedia(r.Context(), mediaIDs)
+	costs := d.creditCostsForMedia(r.Context(), brandRow.ID, mediaIDs)
 	created := []map[string]any{}
 	for _, mediaID := range mediaIDs {
 		if existingSet[mediaID] {
@@ -1074,7 +1074,7 @@ func (d *Deps) CampaignPublicationsCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	costs := d.creditCostsForMedia(r.Context(), uniqueMediaIDs)
+	costs := d.creditCostsForMedia(r.Context(), brandRow.ID, uniqueMediaIDs)
 	totalCost := 0
 	for _, mediaID := range uniqueMediaIDs {
 		totalCost += costs[mediaID]

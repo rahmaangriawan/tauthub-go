@@ -441,7 +441,7 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 	if in.ScheduledAt != nil {
 		scheduledAt = *in.ScheduledAt
 	}
-	pricing := breakdownFor(media.numOr("price"), d.getMarkupPercent(ctx))
+	pricing := breakdownFor(media.numOr("price"), d.effectiveMarkup(ctx, in.BrandID))
 	publicationMode := "draft"
 	if media.strOr("publication_mode", "draft") == "publish" {
 		publicationMode = "publish"

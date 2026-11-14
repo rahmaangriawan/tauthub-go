@@ -91,6 +91,36 @@ var disposableDomains = map[string]bool{
 	"instantemailaddress.com": true, "harakirimail.com": true, "mailsac.com": true, "tempmailaddress.com": true,
 }
 
+// GmailLocalPartValid: bagian sebelum "@" harus mungkin ada di Gmail. Gmail hanya
+// mengizinkan huruf, angka, dan titik (maks 30 karakter, tanpa titik di awal/akhir
+// atau dua titik berurutan); "+tag" diabaikan. Akun baru minimal 6 karakter,
+// tetapi akun lama bisa lebih pendek, jadi batas bawah sengaja dilonggarkan ke 3
+// agar pengguna asli tidak ikut tertolak. Hanya menolak alamat yang pasti
+// mustahil, bukan memastikan alamat itu benar-benar ada.
+func GmailLocalPartValid(email string) bool {
+	at := strings.LastIndex(email, "@")
+	if at <= 0 {
+		return false
+	}
+	local := strings.ToLower(email[:at])
+	if i := strings.IndexByte(local, '+'); i >= 0 {
+		local = local[:i]
+	}
+	if len(local) < 3 || len(local) > 30 {
+		return false
+	}
+	if local[0] == '.' || local[len(local)-1] == '.' || strings.Contains(local, "..") {
+		return false
+	}
+	for i := 0; i < len(local); i++ {
+		c := local[i]
+		if !(c >= 'a' && c <= 'z') && !(c >= '0' && c <= '9') && c != '.' {
+			return false
+		}
+	}
+	return true
+}
+
 type EmailAnalysis struct {
 	Domain       string
 	IsGmail      bool
@@ -176,20 +206,20 @@ func HasMxRecord(domain string) *bool {
 // ---------- registration-guard/config.ts ----------
 
 type GuardScores struct {
-	Disposable             int
-	KnownAbusiveDomain     int
-	VeryNewDomain          int
-	Workspace              int
-	IPIfManyRegistrations  int
+	Disposable              int
+	KnownAbusiveDomain      int
+	VeryNewDomain           int
+	Workspace               int
+	IPIfManyRegistrations   int
 	DeviceManyRegistrations int
-	RecentRegistration     int
-	SuspiciousPattern      int
-	PreviouslyBlocked      int
-	ExistingGoogleSub      int
-	MxMissing              int
-	ReferralDeviceMatch    int
-	ReferralIPMatch        int
-	ReferralBurst          int
+	RecentRegistration      int
+	SuspiciousPattern       int
+	PreviouslyBlocked       int
+	ExistingGoogleSub       int
+	MxMissing               int
+	ReferralDeviceMatch     int
+	ReferralIPMatch         int
+	ReferralBurst           int
 }
 
 type GuardThresholds struct {

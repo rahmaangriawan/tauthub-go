@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	emailqueue "github.com/rahmaangriawan/tauthub-go/internal/email"
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -23,6 +25,12 @@ import (
 
 const emailCodeMsgInvalid = "Kode salah atau sudah kedaluwarsa. Minta kode baru bila perlu."
 const emailTicketMsgInvalid = "Verifikasi email belum selesai atau sudah kedaluwarsa. Minta kode baru."
+const gmailInvalidMsg = "Alamat Gmail ini tidak valid. Periksa lagi penulisannya (hanya huruf, angka, dan titik)."
+
+// registerCodeGlobalPerHour: batas kode verifikasi pendaftaran yang dikirim per
+// jam untuk seluruh sistem (bukan per pengguna).
+const registerCodeGlobalPerHour = 200
+
 const disposableEmailMsg = "Email sementara (temp-mail) tidak bisa dipakai untuk mendaftar. Gunakan alamat Gmail Anda."
 
 func (d *Deps) RequestRegisterCode(w http.ResponseWriter, r *http.Request) {
@@ -58,8 +66,30 @@ func (d *Deps) RequestRegisterCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Per IP tegas (429) supaya UI bisa memberi tahu; per email diam-diam.
-	if err := auth.CheckAuthRate(r.Context(), d.Pool, "regcode:ip:"+orUnknown(ip), 5); err != nil {
+	// Alamat Gmail yang mustahil ada (mis. berisi simbol, terlalu pendek) ditolak
+	// sebelum email dikirim, supaya tidak memantul dan merusak reputasi SMTP.
+	if !auth.GmailLocalPartValid(email) {
+		httpx.Error(w, http.StatusUnprocessableEntity, gmailInvalidMsg)
+		return
+	}
+
+	// Pembatasan per PERANGKAT, bukan per IP: satu jaringan (kantor, kampus,
+	// seluler) bisa dipakai banyak orang. Perangkat dikenali dari cookie
+	// reg_device + user agent, cookie yang sama dengan penjaga pendaftaran.
+	deviceID := readCookie(r, regDeviceCookie)
+	if deviceID == "" {
+		deviceID = uuid.NewString()
+	}
+	d.setRegDeviceCookie(w, deviceID)
+	deviceKey := "none"
+	if h := auth.HashSignal(auth.RequestDeviceSignal(r.Header.Get("user-agent"), deviceID), d.Cfg.CmsEncryptionSecret); h != nil {
+		deviceKey = *h
+	}
+	if err := auth.CheckRate(r.Context(), d.Pool, "regcode:dev10m:"+deviceKey, 3, 600); err != nil {
+		writeRateErr(w, err)
+		return
+	}
+	if err := auth.CheckRate(r.Context(), d.Pool, "regcode:dev1d:"+deviceKey, 10, 86400); err != nil {
 		writeRateErr(w, err)
 		return
 	}
@@ -93,6 +123,12 @@ func (d *Deps) RequestRegisterCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Alamat yang pernah memantul permanen tidak dikirimi lagi (respons netral).
+	if emailqueue.IsSuppressed(r.Context(), d.Pool, email) {
+		okResp(60)
+		return
+	}
+
 	// Email sudah punya akun: tidak ada kode, pemilik asli diberi tahu lewat
 	// email (maks 1/jam) — respons tetap netral.
 	var existingID string
@@ -105,6 +141,14 @@ func (d *Deps) RequestRegisterCode(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		okResp(60)
+		return
+	}
+
+	// Pengaman terakhir: batas total kode pendaftaran per jam untuk SELURUH
+	// sistem. Serangan dari banyak perangkat pun berhenti di sini, sebelum kuota
+	// SMTP habis. Dihitung hanya untuk kode yang benar-benar akan dikirim.
+	if err := auth.CheckRate(r.Context(), d.Pool, "regcode:global", registerCodeGlobalPerHour, 3600); err != nil {
+		httpx.Error(w, http.StatusTooManyRequests, "Pendaftaran sedang padat. Coba lagi beberapa saat lagi.")
 		return
 	}
 

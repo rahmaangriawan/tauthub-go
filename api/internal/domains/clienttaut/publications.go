@@ -67,6 +67,33 @@ func (d *Deps) getMarkupPercent(ctx context.Context) float64 {
 	return value
 }
 
+// effectiveMarkup: markup global setelah diskon loyalty brand (diskon memotong
+// markup; partner price tetap). Dipakai hanya di snapshot publikasi/charge, bukan
+// katalog. brandID kosong = markup global.
+func (d *Deps) effectiveMarkup(ctx context.Context, brandID string) float64 {
+	markup := d.getMarkupPercent(ctx)
+	if brandID == "" {
+		return markup
+	}
+	var spent int64
+	_ = d.Pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount_tc), 0)
+		FROM credit_ledger_entries
+		WHERE brand_id = $1 AND ref_type = 'capture' AND amount_tc > 0`, brandID).Scan(&spent)
+	var disc float64
+	_ = d.Pool.QueryRow(ctx, `
+		SELECT discount_percent FROM loyalty_tiers
+		WHERE min_spend_tc <= $1 ORDER BY min_spend_tc DESC LIMIT 1`, spent).Scan(&disc)
+	if disc <= 0 {
+		return markup
+	}
+	if disc > 100 {
+		disc = 100
+	}
+	// Diskon = d% off harga klien (partner tetap); margin Tauthub yang terpotong.
+	return ((1+markup/100)*(1-disc/100) - 1) * 100
+}
+
 type pricingBreakdown struct {
 	PartnerPrice  float64 `json:"partner_price"`
 	MarkupPercent float64 `json:"markup_percent"`
@@ -228,7 +255,7 @@ func (d *Deps) createPublicationRecord(ctx context.Context, in createPublication
 			scheduledAt = t
 		}
 	}
-	pricing := breakdownFor(media.numOr("price"), d.getMarkupPercent(ctx))
+	pricing := breakdownFor(media.numOr("price"), d.effectiveMarkup(ctx, in.BrandID))
 	publicationMode := "draft"
 	if media.strOr("publication_mode", "draft") == "publish" {
 		publicationMode = "publish"

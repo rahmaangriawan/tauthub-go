@@ -5,12 +5,14 @@
 	// dari Next.js product-shell.tsx.
 	// Menampilkan info user, link ke profil akun, alih dashboard/workspace (jika ada),
 	// link platform admin (jika admin), dan tombol Keluar (logout).
-	import { CircleUser, Building, Settings, LogOut, ChevronsUpDown } from '@lucide/svelte';
+	import { Award, CircleUser, Building, Settings, LogOut, ChevronsUpDown } from '@lucide/svelte';
 	import { clearSession } from '$lib/auth';
+	import { loyaltyTierColor } from '$lib/loyalty';
 
 	let {
 		user,
 		roleLabel = 'Klien',
+		tier = null,
 		profileHref = '/klien',
 		workspaceSwitchHref,
 		workspaceSwitchLabel
@@ -22,10 +24,16 @@
 			role?: string;
 		};
 		roleLabel?: string;
+		tier?: { name: string; discount_percent: number } | null;
 		profileHref?: string;
 		workspaceSwitchHref?: string;
 		workspaceSwitchLabel?: string;
 	} = $props();
+
+	const tierColor = $derived(loyaltyTierColor(tier?.name));
+	const tierText = $derived(
+		tier ? (tier.discount_percent > 0 ? `${tier.name} · −${tier.discount_percent}%` : tier.name) : ''
+	);
 
 	let open = $state(false);
 	let wrapper = $state<HTMLDivElement | null>(null);
@@ -69,13 +77,24 @@
 	>
 		<div
 			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
-			style="background-color: var(--primary);"
+			style="background-color: var(--primary);{tier ? ` box-shadow: 0 0 0 2px var(--sidebar-hover), 0 0 0 3.5px ${tierColor};` : ''}"
 		>
 			{initials}
 		</div>
 		<div class="app-account-info">
 			<span class="app-account-name">{user.display_name}</span>
-			<span class="app-role-badge">{roleLabel}</span>
+			<span class="app-account-badges">
+				<span class="app-role-badge">{roleLabel}</span>
+				{#if tier}
+					<span
+						class="app-tier-badge"
+						style="color: {tierColor}; background-color: color-mix(in srgb, {tierColor} 15%, transparent);"
+						title={tr("Level loyalitas")}
+					>
+						<Award size={10} />{tierText}
+					</span>
+				{/if}
+			</span>
 		</div>
 		<ChevronsUpDown
 			size={14}
@@ -199,6 +218,26 @@
 			left: 0;
 			right: auto;
 		}
+
+	.app-account-badges {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+	}
+
+	.app-tier-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		flex: 0 0 auto;
+		border-radius: 999px;
+		padding: 1px 6px 1px 5px;
+		font-size: 10px;
+		font-weight: 700;
+		line-height: 1.5;
+		white-space: nowrap;
+	}
 
 	.app-account-menu {
 		position: absolute;

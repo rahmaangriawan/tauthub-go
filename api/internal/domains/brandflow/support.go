@@ -151,7 +151,8 @@ func creditFromClientPrice(clientPrice float64, rate int) int {
 }
 
 // creditCostForMedia: TC dari CLIENT price (pricing engine: partner price × markup).
-func (d *Deps) creditCostForMedia(ctx context.Context, mediaID string) int {
+// brandID dipakai untuk diskon loyalty (markup efektif); kosong = markup global.
+func (d *Deps) creditCostForMedia(ctx context.Context, brandID, mediaID string) int {
 	row, err := d.queryRow(ctx, "SELECT price FROM media WHERE id = $1 LIMIT 1", mediaID)
 	if err != nil || row == nil {
 		return 0
@@ -161,12 +162,13 @@ func (d *Deps) creditCostForMedia(ctx context.Context, mediaID string) int {
 		return 0
 	}
 	rate := d.getTcConfig(ctx).RateIDR
-	markup := d.getMarkupPercent(ctx)
+	markup := d.effectiveMarkup(ctx, brandID)
 	return creditFromClientPrice(computeClientPrice(price, markup), rate)
 }
 
 // creditCostsForMedia: TC per media sekaligus (1 query price + config cache).
-func (d *Deps) creditCostsForMedia(ctx context.Context, mediaIDs []string) map[string]int {
+// brandID dipakai untuk diskon loyalty (markup efektif); kosong = markup global.
+func (d *Deps) creditCostsForMedia(ctx context.Context, brandID string, mediaIDs []string) map[string]int {
 	out := map[string]int{}
 	if len(mediaIDs) == 0 {
 		return out
@@ -182,7 +184,7 @@ func (d *Deps) creditCostsForMedia(ctx context.Context, mediaIDs []string) map[s
 		return out
 	}
 	rate := d.getTcConfig(ctx).RateIDR
-	markup := d.getMarkupPercent(ctx)
+	markup := d.effectiveMarkup(ctx, brandID)
 	for _, row := range rows {
 		price := row.numOr("price")
 		out[row.strOr("id", "")] = creditFromClientPrice(computeClientPrice(price, markup), rate)

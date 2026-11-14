@@ -506,7 +506,38 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 	let smtpSendMsg = $state({ text: '', ok: false });
 	let testEmail = $state('');
 
+	// Webhook bounce/komplain Kirim.id: secret disimpan ter-seal, tidak pernah
+	// dikembalikan ke UI; hanya status dan URL yang didaftarkan di Kirim.id.
+	let hookInfo = $state<{ configured: boolean; source: string; url: string } | null>(null);
+	let hookSecret = $state('');
+	let hookBusy = $state(false);
+	let hookMsg = $state({ text: '', ok: false });
+
+	async function loadWebhook() {
+		const res = await request<{ configured: boolean; source: string; url: string }>('/settings/email/webhook');
+		if (res.ok) hookInfo = res.data;
+	}
+
+	async function saveWebhook(e: SubmitEvent) {
+		e.preventDefault();
+		if (!hookSecret.trim() && hookInfo?.configured && !confirm('Kolom kosong akan menghapus secret webhook yang tersimpan. Lanjutkan?')) return;
+		hookBusy = true;
+		hookMsg = { text: '', ok: false };
+		const res = await request('/settings/email/webhook', {
+			method: 'PUT',
+			body: JSON.stringify({ secret: hookSecret.trim() })
+		});
+		if (!res.ok) hookMsg = { text: res.error, ok: false };
+		else {
+			hookMsg = { text: hookSecret.trim() ? 'Secret webhook disimpan.' : 'Secret webhook dihapus.', ok: true };
+			hookSecret = '';
+			await loadWebhook();
+		}
+		hookBusy = false;
+	}
+
 	async function loadSmtp() {
+		void loadWebhook();
 		const res = await request<SmtpConfig>('/settings/email');
 		if (!res.ok) {
 			smtpError = res.error;
@@ -1421,6 +1452,43 @@ endpoint := fmt.Sprintf("%s/domain/traffic?url=%s", BaseURL, targetDomain)`;
 						</div>
 					{/if}
 					<button class="app-btn app-btn-primary" type="submit" disabled={smtpBusy}>{smtpBusy ? 'Menyimpan…' : tr('Simpan Konfigurasi')}</button>
+				</form>
+
+				<hr class="my-4 border-t" />
+				<h3 class="text-sm font-semibold">Webhook bounce Kirim.id</h3>
+				<p class="mt-1 text-xs text-muted-foreground">
+					Mencatat alamat email yang memantul permanen supaya tidak dikirimi lagi. Daftarkan URL di bawah di Kirim.id
+					(event bounce dan complaint), lalu tempel secret yang diberikan Kirim.id di sini.
+				</p>
+				<form class="mt-3 space-y-3" onsubmit={saveWebhook}>
+					<label class="block">
+						<span class="text-sm font-medium">URL webhook</span>
+						<input class="app-input mt-1 w-full" readonly value={hookInfo?.url ?? ''} onfocus={(e) => e.currentTarget.select()} />
+					</label>
+					<label class="block">
+						<span class="text-sm font-medium">Secret webhook</span>
+						<span class="block text-xs text-muted-foreground">
+							{#if hookInfo?.configured}
+								{hookInfo.source === 'env' ? 'Terkonfigurasi dari environment server' : 'Terkonfigurasi'} ✓ — kosongkan dan simpan untuk menghapus
+							{:else}
+								Belum diisi — webhook menolak semua kiriman
+							{/if}
+						</span>
+						<input
+							class="app-input mt-1 w-full"
+							type="password"
+							autocomplete="new-password"
+							placeholder={hookInfo?.configured ? 'Isi untuk mengganti secret' : 'Tempel secret dari Kirim.id'}
+							bind:value={hookSecret}
+						/>
+					</label>
+					{#if hookMsg.text}
+						<div class="flex items-center gap-2 text-sm" style="color: {hookMsg.ok ? 'var(--success)' : 'var(--destructive)'};">
+							{#if hookMsg.ok}<CheckCircle2 size={15} />{:else}<TriangleAlert size={15} />{/if}
+							{hookMsg.text}
+						</div>
+					{/if}
+					<button class="app-btn app-btn-primary" type="submit" disabled={hookBusy}>{hookBusy ? 'Menyimpan…' : 'Simpan Secret'}</button>
 				</form>
 
 				<hr class="my-4 border-t" />

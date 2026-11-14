@@ -19,6 +19,19 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.6.4 — 2026-11-12
+
+### Fitur
+- **Audit Publikasi**: dashboard kepatuhan artikel yang sudah terbit. Ringkasan sehat dan bermasalah, tren 12 bulan, kondisi tautan, dan media terbanyak. Bisa difilter per periode terbit dan diunduh sebagai PDF atau CSV.
+- **Kalender editorial**: tampilan kalender bulanan untuk melihat sebaran tanggal terbit dan jadwal artikelmu. Klik satu tanggal untuk melihat penempatannya beserta tautan artikel yang sudah terbit.
+
+## v0.6.3 — 2026-11-12
+
+### Fitur
+- **Level loyalitas**: makin besar total belanjamu di Tauthub, makin tinggi tier kamu (Bronze, Silver, Gold, Platinum) dan makin besar diskonnya. Diskon otomatis terpotong saat kamu membuat kampanye, jadi harga partner tidak berubah dan potongan diambil dari margin kami. Status level, total belanja, dan sisa menuju tier berikutnya bisa dilihat di Profil, tab Akun.
+- **Saran media sejenis saat checkout**: ketika kamu menyimpan kampanye, muncul rekomendasi media yang mirip dengan pilihanmu (kategori dan kelas yang sama) dan belum ada di keranjang, supaya lebih mudah menambah jangkauan sekali jalan.
+- **Laporan bulanan lewat email**: ringkasan aktivitas brand tiap bulan, berisi artikel yang terbit, total belanja, saldo saat ini, dan media terbaik, dikirim otomatis ke email admin brand di awal bulan. Bisa dimatikan kapan saja di Preferensi notifikasi.
+
 ## v0.6.2 — 2026-11-11
 
 ### Fitur

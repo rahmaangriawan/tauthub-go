@@ -32,7 +32,10 @@ type Config struct {
 
 	AdminEmails []string
 
-	CmsEncryptionSecret     string
+	CmsEncryptionSecret string
+	// KirimWebhookSecret: secret webhook email Kirim.id (verifikasi HMAC-SHA256
+	// header X-Kirim-Signature). Kosong = endpoint webhook menolak semua request.
+	KirimWebhookSecret      string
 	AuthRateLimitPerMinute  int
 	WriteRateLimitPerMinute int
 	// SSRGateRateLimitPerMinute: batas per pengguna untuk /v1/auth/ssr-gate.
@@ -131,6 +134,8 @@ func Load() (*Config, error) {
 	if c.SSRGateRateLimitPerMinute, err = getInt("SSR_GATE_RATE_LIMIT_PER_MINUTE", 120); err != nil {
 		return nil, err
 	}
+
+	c.KirimWebhookSecret = strings.TrimSpace(os.Getenv("KIRIM_WEBHOOK_SECRET"))
 
 	c.GoogleClientID = os.Getenv("GOOGLE_CLIENT_ID")
 	c.GoogleClientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")

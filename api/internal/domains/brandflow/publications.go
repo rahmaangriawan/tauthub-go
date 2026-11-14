@@ -174,7 +174,7 @@ func (d *Deps) PublicationsCreate(w http.ResponseWriter, r *http.Request) {
 	)
 	mediaCost := func() int {
 		if !mediaCostDone {
-			mediaCostVal = d.creditCostForMedia(r.Context(), mediaID)
+			mediaCostVal = d.creditCostForMedia(r.Context(), brandRow.ID, mediaID)
 			mediaCostDone = true
 		}
 		return mediaCostVal
@@ -1101,7 +1101,7 @@ func (d *Deps) PublicationVariantsCreate(w http.ResponseWriter, r *http.Request)
 			d.writeErr(w, err)
 			return
 		}
-		costs := d.creditCostsForMedia(r.Context(), mediaIDs)
+		costs := d.creditCostsForMedia(r.Context(), brandRow.ID, mediaIDs)
 		for _, id := range mediaIDs {
 			totalCost += costs[id]
 		}

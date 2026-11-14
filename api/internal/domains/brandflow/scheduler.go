@@ -416,7 +416,7 @@ func (d *Deps) schMaterializeDueOccurrences(ctx context.Context, limit int) (mat
 		//    plan dibuat, sehingga plan berbulan-bulan tidak mengunci wallet.
 		//    Parity plans.ts: hanya brand yang punya dompet TC yang direservasi.
 		if wallet := d.getWallet(ctx, brandID); wallet != nil {
-			cost := d.creditCostForMedia(ctx, mediaID)
+			cost := d.creditCostForMedia(ctx, brandID, mediaID)
 			if cost > 0 {
 				if _, rErr := d.reserveCredit(ctx, brandID, publicationID, cost, userID); rErr != nil {
 					var ice *insufficientCreditsError

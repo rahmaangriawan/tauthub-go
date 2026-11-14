@@ -315,7 +315,19 @@ func ProcessEmailInline(ctx context.Context, pool *pgxpool.Pool, cmsSecret strin
 		return false, "", "Delivery disappeared"
 	}
 
+	if IsSuppressed(ctx, pool, recipient) {
+		markSkipped(ctx, pool, deliveryID, "SUPPRESSED", "Alamat pernah memantul permanen")
+		return false, "", "Recipient suppressed"
+	}
+
 	messageID, sendErr := smtpSend(cfg, recipient, subject, html)
+	if sendErr != nil && IsHardBounce(sendErr) {
+		// Alamat tidak ada: catat dan jangan coba lagi.
+		MarkSuppressed(ctx, pool, recipient, "hard_bounce", sendErr.Error())
+		markSkipped(ctx, pool, deliveryID, "HARD_BOUNCE", sendErr.Error())
+		slog.Warn("[email] alamat mati dicatat", "delivery", deliveryID)
+		return false, "", sendErr.Error()
+	}
 	if sendErr != nil {
 		slog.Error("[email] SMTP send gagal", "err", sendErr, "delivery", deliveryID)
 		MarkFailed(ctx, pool, deliveryID, "SMTP_ERROR", sendErr.Error())

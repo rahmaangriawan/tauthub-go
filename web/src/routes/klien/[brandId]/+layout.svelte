@@ -10,7 +10,7 @@
 	import { onMount, setContext } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		Bell, ChartLine, ChevronDown, Coins, House, Megaphone, MessageCircle, Newspaper, Receipt,
+		Bell, CalendarDays, ChartLine, ChevronDown, Coins, House, Megaphone, MessageCircle, Newspaper, Receipt,
 		BookOpen, ScrollText, ShieldCheck, TriangleAlert, UserCircle } from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, getStoredSession, resolveSessionRole, showToast, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { swr } from '$lib/swr-cache.svelte';
@@ -54,6 +54,19 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			if (!res.ok) throw new Error('gagal memuat overview');
 			return res.json();
 		}
+	);
+
+	// Status loyalty untuk badge tier di tombol akun sidebar.
+	const loyalty = swr<{ tier_name: string; discount_percent: number }>(
+		() => (getStoredSession() ? `/v1/brands/${brandId}/loyalty` : null),
+		async () => {
+			const res = await apiRequest(`/v1/brands/${brandId}/loyalty`);
+			if (!res.ok) throw new Error('gagal memuat loyalty');
+			return res.json();
+		}
+	);
+	const loyaltyTier = $derived(
+		loyalty.data ? { name: loyalty.data.tier_name, discount_percent: loyalty.data.discount_percent } : null
 	);
 
 	onMount(() => {
@@ -276,7 +289,8 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 			label: i18n.t.nav.group_analytics,
 			items: [
 				{ label: i18n.t.nav.analytics, href: `${base}/analytics`, icon: ChartLine, active: isActive(`${base}/analytics`) },
-				{ label: i18n.t.nav.audit, href: `${base}/audit-publikasi`, icon: ShieldCheck, active: isActive(`${base}/audit-publikasi`) }
+				{ label: i18n.t.nav.audit, href: `${base}/audit-publikasi`, icon: ShieldCheck, active: isActive(`${base}/audit-publikasi`) },
+				{ label: tr('Kalender Editorial'), href: `${base}/kalender`, icon: CalendarDays, active: isActive(`${base}/kalender`) },
 			]
 		},
 		{
@@ -309,6 +323,7 @@ import AnnouncementPopup from '$lib/components/announcement-popup.svelte';
 				<AccountDropdown
 					{user}
 					roleLabel="Klien"
+					tier={loyaltyTier}
 					profileHref={`${base}/profile`}
 					workspaceSwitchHref={user.role === 'partner' ? '/mitra' : undefined}
 					workspaceSwitchLabel={user.role === 'partner' ? tr('Portal Mitra') : undefined}

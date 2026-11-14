@@ -354,6 +354,8 @@ func run() error {
 			authed.Get("/brands/{brandId}/campaigns", clientRead.Campaigns)
 			authed.Get("/brands/{brandId}/link-monitor", clientRead.LinkMonitor)
 			authed.Get("/brands/{brandId}/performance", brandFlowDeps.PerformanceOverview)
+			authed.Get("/brands/{brandId}/audit", brandFlowDeps.AuditPublications)
+			authed.Get("/brands/{brandId}/calendar", brandFlowDeps.CalendarMonth)
 			authed.Get("/brands/{brandId}/campaigns/{campaignId}/performance", resolveCampaign(brandFlowDeps.CampaignPerformance))
 			authed.Get("/brands/{brandId}/analytics", clientRead.Analytics)
 			authed.Get("/brands/{brandId}/credits", clientRead.Credits)
@@ -445,6 +447,8 @@ func run() error {
 			authed.Delete("/brands/{brandId}/cms-connections/{connectionId}", brandFlowDeps.CmsConnectionDelete)
 			authed.Patch("/brands/{brandId}/documents/{documentId}", brandFlowDeps.ContentDocumentPatch)
 			authed.Get("/brands/{brandId}/media/recommendations", brandFlowDeps.MediaRecommendations)
+			authed.Get("/brands/{brandId}/media/similar", brandFlowDeps.MediaSimilar)
+			authed.Get("/brands/{brandId}/loyalty", brandFlowDeps.Loyalty)
 			authed.Post("/brands/{brandId}/media/matchmaker", brandFlowDeps.MediaMatchmaker)
 			authed.Put("/brands/{brandId}/notification-webhooks/{webhookId}", brandFlowDeps.NotificationWebhookUpdate)
 			authed.Delete("/brands/{brandId}/notification-webhooks/{webhookId}", brandFlowDeps.NotificationWebhookDelete)
@@ -560,6 +564,8 @@ func run() error {
 		// Webhook (verifikasi signature provider) + status polling pasca-redirect
 		// gateway: PUBLIK. gateway/active butuh Bearer user biasa.
 		v1.Post("/payments/webhooks/{provider}", platformDeps.PaymentWebhook)
+		// Webhook bounce/komplain email dari Kirim.id (publik, HMAC X-Kirim-Signature).
+		v1.Post("/webhooks/email/kirim", platformDeps.KirimEmailWebhook)
 		v1.Get("/payments/status/{transactionId}", platformDeps.PublicPaymentStatus)
 
 		v1.Group(func(authed chi.Router) {
@@ -872,6 +878,8 @@ func run() error {
 			authed.Put("/platform/operations/users/{userId}/status", platformDeps.OperationsUserStatus)
 			authed.Get("/platform/operations/registration-blocks", platformDeps.RegistrationBlocksList)
 			authed.Delete("/platform/operations/registration-blocks", platformDeps.RegistrationBlockRemove)
+			authed.Get("/platform/operations/email-suppressions", platformDeps.EmailSuppressionsList)
+			authed.Delete("/platform/operations/email-suppressions", platformDeps.EmailSuppressionRemove)
 			authed.Get("/platform/operations/blocked-domains", platformDeps.BlockedDomainsList)
 			authed.Get("/platform/operations/blocked-domains/builtin", platformDeps.BuiltinDisposableDomains)
 			authed.Post("/platform/operations/blocked-domains", platformDeps.BlockedDomainAdd)
@@ -911,6 +919,8 @@ func run() error {
 			// Settings.
 			authed.With(platformDeps.SuperAdminOnly).Get("/platform/settings/email", platformDeps.SettingsEmailGet)
 			authed.With(platformDeps.SuperAdminOnly).Put("/platform/settings/email", platformDeps.SettingsEmailPut)
+			authed.With(platformDeps.SuperAdminOnly).Get("/platform/settings/email/webhook", platformDeps.KirimWebhookSettingsGet)
+			authed.With(platformDeps.SuperAdminOnly).Put("/platform/settings/email/webhook", platformDeps.KirimWebhookSettingsPut)
 			authed.With(platformDeps.SuperAdminOnly).Get("/platform/settings/email/deliveries", platformDeps.SettingsEmailDeliveries)
 			authed.With(platformDeps.SuperAdminOnly).Post("/platform/settings/email/test-connection", platformDeps.SettingsEmailTestConnection)
 			authed.With(platformDeps.SuperAdminOnly).Post("/platform/settings/email/test-send", platformDeps.SettingsEmailTestSend)
@@ -1129,6 +1139,9 @@ func run() error {
 			authed.Get("/platform/vip-partners/{partnerId}/domains", platformDeps.VipPartnerDomains)
 			authed.Get("/platform/pricing", platformDeps.PricingGet)
 			authed.Put("/platform/pricing", platformDeps.PricingPut)
+			authed.Get("/platform/loyalty-tiers", platformDeps.LoyaltyTiersList)
+			authed.Put("/platform/loyalty-tiers", platformDeps.LoyaltyTierUpsert)
+			authed.Delete("/platform/loyalty-tiers/{tierName}", platformDeps.LoyaltyTierDelete)
 
 			// Bug reports / auto-replace / config / gatekeeper / diagnostics / link-monitor.
 			authed.Post("/bug-reports", platformDeps.BugReportSubmit)

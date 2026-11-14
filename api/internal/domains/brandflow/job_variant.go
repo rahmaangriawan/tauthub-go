@@ -173,7 +173,7 @@ func (d *Deps) runVariantJob(ctx context.Context, in variantJobInput) error {
 	publicationID = created.Row.strOr("id", "")
 
 	// Wallet TC (brand) — reservasi idempoten per publikasi.
-	cost := d.creditCostForMedia(ctx, in.MediaID)
+	cost := d.creditCostForMedia(ctx, in.BrandID, in.MediaID)
 	if cost > 0 {
 		if _, rErr := d.reserveCredit(ctx, in.BrandID, publicationID, cost, in.UserID); rErr != nil {
 			// Jangan tinggalkan publikasi yatim saat reservasi gagal.

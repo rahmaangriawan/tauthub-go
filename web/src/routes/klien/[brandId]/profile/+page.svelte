@@ -4,14 +4,37 @@
 	// Profil & Akun — tab Akun / Preferensi notifikasi / Keamanan. Semua endpoint
 	// sudah ada (fase 1 & 2), jadi tidak ada data placeholder.
 	import { onMount } from 'svelte';
-	import { Check, CircleAlert, KeyRound, MessageCircle, ShieldCheck, UserCircle, Eye, EyeOff } from '@lucide/svelte';
+	import { page } from '$app/state';
+	import { Award, Check, CircleAlert, KeyRound, MessageCircle, ShieldCheck, UserCircle, Eye, EyeOff } from '@lucide/svelte';
 	import {
 		apiRequest, readApiError, ensureValidSession, getStoredSession,
 		updateStoredUser, AUTH_EXPIRED_EVENT, type AuthUser
 	} from '$lib/auth';
+	import { loyaltyTierColor } from '$lib/loyalty';
 	import PageTitle from '$lib/components/page-title.svelte';
 	import DevicePushCard from '$lib/components/device-push-card.svelte';
 	import { renderSVG } from 'uqr';
+
+	const brandId = $derived(page.params.brandId as string);
+
+	// Status loyalty (tier + diskon + progres ke tier berikutnya) — tab Akun.
+	type Loyalty = {
+		tier_name: string;
+		discount_percent: number;
+		lifetime_spend_tc: number;
+		next_tier: { name: string; min_spend_tc: number; remaining_tc: number } | null;
+	};
+	let loyalty = $state<Loyalty | null>(null);
+	const tierColor = $derived(loyaltyTierColor(loyalty?.tier_name));
+	const loyaltyProgress = $derived.by(() => {
+		const l = loyalty;
+		if (!l || !l.next_tier) return 100;
+		const target = l.next_tier.min_spend_tc;
+		if (target <= 0) return 100;
+		const have = Math.max(0, target - l.next_tier.remaining_tc);
+		return Math.min(100, Math.max(0, Math.round((have / target) * 100)));
+	});
+	const fmtNum = (n: number) => new Intl.NumberFormat('id-ID').format(Math.round(n || 0));
 
 	// Tab halaman; label lewat $derived karena locale baru siap setelah layout init.
 	const TABS = $derived<Array<{ key: 'akun' | 'notifikasi' | 'keamanan'; label: string }>>([
@@ -99,6 +122,7 @@
 			if (!fresh) return;
 			user = fresh.user;
 			await load();
+			void loadLoyalty();
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -110,6 +134,15 @@
 		if (prefs.ok) {
 			const d = await prefs.json();
 			notif = { wa_number: d.wa_number ?? '', wa_consent: Boolean(d.wa_consent), monthly_report_optout: Boolean(d.monthly_report_optout) };
+		}
+	}
+
+	async function loadLoyalty() {
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/loyalty`);
+			if (res.ok) loyalty = await res.json();
+		} catch {
+			/* silent */
 		}
 	}
 
@@ -285,6 +318,33 @@
 				{/if}
 			{/if}
 		</div>
+
+		{#if loyalty}
+			<div class="app-card pf-card">
+				<div class="pf-head">
+					<span class="pf-tile" style="background-color: color-mix(in srgb, {tierColor} 16%, transparent); color: {tierColor};"><Award size={18} strokeWidth={1.5} /></span>
+					<h2 class="pf-h2">{tr("Level loyalitas")}</h2>
+				</div>
+				<div class="loy-head">
+					<p class="loy-tier">
+						{loyalty.tier_name}
+						{#if loyalty.discount_percent > 0}<span class="loy-disc">−{loyalty.discount_percent}%</span>{/if}
+					</p>
+					<div class="loy-spend">
+						<p class="loy-spend-label">{tr("Total belanja")}</p>
+						<p class="loy-spend-val">{fmtNum(loyalty.lifetime_spend_tc)}</p>
+					</div>
+				</div>
+				{#if loyalty.next_tier}
+					<div class="loy-bar"><div class="loy-bar-fill" style="width: {loyaltyProgress}%; background-color: {tierColor};"></div></div>
+					<p class="loy-next">
+						{tr("Belanja")} <strong>{fmtNum(loyalty.next_tier.remaining_tc)}</strong> {tr("lagi untuk naik ke")} <strong>{loyalty.next_tier.name}</strong>.
+					</p>
+				{:else}
+					<p class="loy-next">{tr("Kamu sudah di tier tertinggi.")}</p>
+				{/if}
+			</div>
+		{/if}
 	{:else if tab === 'notifikasi'}
 		<!-- Notifikasi -->
 		<form class="app-card pf-card" onsubmit={saveNotif}>
@@ -459,4 +519,15 @@
 	.pf-2fa { display: flex; flex-direction: column; gap: 20px; margin-top: 16px; }
 	@media (min-width: 640px) { .pf-2fa { flex-direction: row; align-items: flex-start; } }
 	.pf-qr { width: 160px; flex-shrink: 0; align-self: flex-start; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background-color: #fff; }
+
+	/* Kartu status loyalty (tab Akun). */
+	.loy-head { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+	.loy-tier { flex: 1 1 auto; min-width: 0; font-size: 22px; line-height: 30px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+	.loy-disc { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 9999px; color: var(--success, #15803d); background-color: color-mix(in srgb, var(--success, #15803d) 12%, transparent); }
+	.loy-spend { text-align: right; flex-shrink: 0; }
+	.loy-spend-label { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted-foreground); }
+	.loy-spend-val { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+	.loy-bar { height: 8px; margin-top: 16px; overflow: hidden; border-radius: 9999px; background-color: var(--muted, #eef1f5); }
+	.loy-bar-fill { height: 100%; border-radius: 9999px; transition: width 0.3s; }
+	.loy-next { margin-top: 10px; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
 </style>

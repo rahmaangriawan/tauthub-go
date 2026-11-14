@@ -5,7 +5,7 @@
 	// Tauthub (client − harga mitra). Prioritas: media+partner → media → partner
 	// → default 75/25. Tab kedua: Markup Harga Klien (pricing_config).
 	import { onMount } from 'svelte';
-	import { CircleCheck, Coins, Percent, TriangleAlert } from '@lucide/svelte';
+	import { Award, CircleCheck, Coins, Percent, TriangleAlert } from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
@@ -15,6 +15,7 @@
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtRp, fmtNum } from '$lib/admin-format';
 	import { platformError, isAccessDenied } from '../_platform';
+	import { loyaltyTierColor } from '$lib/loyalty';
 
 	type Rule = {
 		id: string; name: string; partner_id: string | null; partner_name: string | null;
@@ -35,7 +36,7 @@
 	let error = $state('');
 	let loading = $state(true);
 	let pageNum = $state(1);
-	let tab = $state<'rules' | 'finance'>('rules');
+	let tab = $state<'rules' | 'finance' | 'loyalty'>('rules');
 	let createOpen = $state(false);
 	let busy = $state(false);
 	let form = $state({
@@ -50,6 +51,14 @@
 	let markupBusy = $state(false);
 	let markupMsg = $state('');
 
+	// Tab loyalty tiers
+	type Tier = { name: string; min_spend_tc: number; discount_percent: number; sort_order: number };
+	let tiers = $state<Tier[]>([]);
+	let tiersLoading = $state(true);
+	let tierBusy = $state(false);
+	let tierMsg = $state('');
+	let tierForm = $state({ name: '', min_spend_tc: '', discount_percent: '', sort_order: '' });
+
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
@@ -57,6 +66,7 @@
 			await load();
 			loading = false;
 			await loadPricing();
+			await loadTiers();
 		})();
 		const onExpired = () => (window.location.href = '/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -166,6 +176,67 @@
 		markupBusy = false;
 	}
 
+	async function loadTiers() {
+		tiersLoading = true;
+		const res = await apiRequest('/v1/platform/loyalty-tiers');
+		if (res.ok) {
+			const data = await res.json();
+			tiers = data.loyalty_tiers ?? [];
+		} else {
+			tierMsg = await platformError(res);
+		}
+		tiersLoading = false;
+	}
+
+	async function upsertTier(t: { name: string; min_spend_tc: number | string; discount_percent: number | string; sort_order: number | string }) {
+		tierBusy = true;
+		tierMsg = '';
+		const res = await apiRequest('/v1/platform/loyalty-tiers', {
+			method: 'PUT',
+			body: JSON.stringify({
+				name: String(t.name).trim(),
+				min_spend_tc: Number(t.min_spend_tc) || 0,
+				discount_percent: Number(t.discount_percent) || 0,
+				sort_order: Number(t.sort_order) || 0
+			})
+		});
+		if (!res.ok) {
+			tierMsg = await platformError(res);
+			tierBusy = false;
+			return false;
+		}
+		tierBusy = false;
+		await loadTiers();
+		return true;
+	}
+
+	async function saveTier(t: Tier) {
+		if (await upsertTier(t)) tierMsg = `Tier ${t.name} tersimpan.`;
+	}
+
+	async function addTier(e: SubmitEvent) {
+		e.preventDefault();
+		if (!tierForm.name.trim()) {
+			tierMsg = 'Nama tier wajib diisi.';
+			return;
+		}
+		if (await upsertTier(tierForm)) {
+			tierMsg = `Tier ${tierForm.name.trim()} tersimpan.`;
+			tierForm = { name: '', min_spend_tc: '', discount_percent: '', sort_order: '' };
+		}
+	}
+
+	async function deleteTier(name: string) {
+		if (!confirm(`Hapus tier ${name}?`)) return;
+		tierMsg = '';
+		const res = await apiRequest(`/v1/platform/loyalty-tiers/${encodeURIComponent(name)}`, { method: 'DELETE' });
+		if (!res.ok) {
+			tierMsg = await platformError(res);
+			return;
+		}
+		await loadTiers();
+	}
+
 	const markupPreviewBase = 50000;
 	const markupPreview = $derived(
 		markup != null && Number.isFinite(markup) && markup >= 0
@@ -206,6 +277,12 @@
 				type="button"
 				onclick={() => (tab = 'finance')}
 			><Coins size={15} />{tr("Markup Harga Klien")}</button>
+			<button
+				class="flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium"
+				style="border-color: {tab === 'loyalty' ? 'var(--primary)' : 'transparent'}; color: {tab === 'loyalty' ? 'var(--primary)' : 'var(--muted-foreground)'};"
+				type="button"
+				onclick={() => (tab = 'loyalty')}
+			><Award size={15} />{tr("Loyalty Tier")}</button>
 		</div>
 
 		{#if tab === 'rules'}
@@ -265,7 +342,7 @@
 					/>
 				</div>
 			</div>
-		{:else}
+		{:else if tab === 'finance'}
 			<div class="app-card mt-3 p-5">
 				{#if markupLoading}
 					<p class="text-sm text-muted-foreground">{tr("Memuat konfigurasi finance…")}</p>
@@ -308,6 +385,70 @@
 							{/if}
 						</div>
 					</form>
+				{/if}
+			</div>
+		{:else if tab === 'loyalty'}
+			<div class="app-card mt-3 p-5">
+				<p class="text-sm text-muted-foreground">{tr("Diskon loyalitas berdasarkan total belanja seumur hidup brand (TC ≈ rupiah). Diskon memotong markup Tauthub; harga partner tetap. Hanya tampil di checkout & saat charge, bukan di harga katalog.")}</p>
+				<div class="my-4 border-t"></div>
+				{#if tiersLoading}
+					<p class="text-sm text-muted-foreground">{tr("Memuat tier…")}</p>
+				{:else}
+					<div class="overflow-x-auto">
+						<table class="w-full text-sm" style="min-width: 640px;">
+							<thead>
+								<tr class="text-left text-xs text-muted-foreground">
+									<th class="px-3 py-2 font-medium">{tr("Tier")}</th>
+									<th class="px-3 py-2 font-medium">{tr("Min. belanja (TC)")}</th>
+									<th class="px-3 py-2 font-medium">{tr("Diskon (%)")}</th>
+									<th class="px-3 py-2 font-medium">{tr("Urutan")}</th>
+									<th class="px-3 py-2 font-medium">{tr("Aksi")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each tiers as t (t.name)}
+									<tr class="border-t">
+										<td class="px-3 py-2">
+											<span
+												class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold"
+												style="color: {loyaltyTierColor(t.name)}; background-color: color-mix(in srgb, {loyaltyTierColor(t.name)} 15%, transparent);"
+											>
+												<Award size={12} />{t.name}{#if Number(t.discount_percent) > 0} · −{t.discount_percent}%{/if}
+											</span>
+										</td>
+										<td class="px-3 py-2"><input class="app-input w-36" type="number" min="0" step="1" bind:value={t.min_spend_tc} /></td>
+										<td class="px-3 py-2"><input class="app-input w-24" type="number" min="0" max="100" step="0.01" bind:value={t.discount_percent} /></td>
+										<td class="px-3 py-2"><input class="app-input w-20" type="number" step="1" bind:value={t.sort_order} /></td>
+										<td class="px-3 py-2">
+											<div class="flex gap-2">
+												<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" disabled={tierBusy} onclick={() => void saveTier(t)}>{tr("Simpan")}</button>
+												<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" onclick={() => void deleteTier(t.name)}>{tr("Hapus")}</button>
+											</div>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+					{#if tiers.length === 0}
+						<p class="mt-3 text-sm text-muted-foreground">{tr("Belum ada tier.")}</p>
+					{/if}
+
+					<div class="my-4 border-t"></div>
+					<p class="mb-2 text-xs font-semibold text-muted-foreground">{tr("Tambah / perbarui tier")}</p>
+					<form class="flex flex-wrap items-end gap-3" onsubmit={addTier}>
+						<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Nama tier")}</span><input class="app-input w-40" bind:value={tierForm.name} placeholder="Gold" maxlength="40" /></label>
+						<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Min. belanja (TC)")}</span><input class="app-input w-40" type="number" min="0" step="1" bind:value={tierForm.min_spend_tc} placeholder="50000000" /></label>
+						<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Diskon (%)")}</span><input class="app-input w-28" type="number" min="0" max="100" step="0.01" bind:value={tierForm.discount_percent} placeholder="6" /></label>
+						<label class="block"><span class="mb-1 block text-xs font-semibold text-muted-foreground">{tr("Urutan")}</span><input class="app-input w-20" type="number" step="1" bind:value={tierForm.sort_order} placeholder="3" /></label>
+						<button class="app-btn app-btn-primary" type="submit" disabled={tierBusy}>{tierBusy ? tr('Menyimpan…') : tr('Simpan Tier')}</button>
+					</form>
+					{#if tierMsg}
+						<div class="mt-3 flex items-start gap-2 text-sm" style="color: {tierMsg.includes('tersimpan') ? 'var(--success)' : 'var(--destructive)'};">
+							{#if tierMsg.includes('tersimpan')}<CircleCheck size={16} class="mt-0.5 shrink-0" />{:else}<TriangleAlert size={16} class="mt-0.5 shrink-0" />{/if}
+							{tierMsg}
+						</div>
+					{/if}
 				{/if}
 			</div>
 		{/if}

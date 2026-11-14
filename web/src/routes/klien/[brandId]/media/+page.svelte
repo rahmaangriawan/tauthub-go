@@ -315,7 +315,6 @@
 	let toolsOpen = $state(false);
 	// Kategori: radio (maks 5 tampil, sisanya lewat tombol expand).
 	let catExpand = $state(false);
-	// Cek pesanan ganda: media yang sudah dipesan di kampanye aktif lain.
 	// Saldo kredit (bar seleksi & modal) — null = belum/gagal terbaca.
 	let walletAvailableTc = $state<number | null>(null);
 	let walletRateIdr = $state(1000);
@@ -353,22 +352,15 @@
 		score: number; reasons: string[]; fit: string;
 		is_available: boolean; dewan_pers_verified?: boolean;
 	};
-	let recommendations = $state<Recommendation[]>([]);
-	let recsHasHistory = $state(false);
-	let recsLoading = $state(true);
-
-	async function loadRecommendations() {
-		recsLoading = true;
-		try {
-			const res = await apiRequest(`${apiBase}/media/recommendations?count=6`);
-			if (res.ok) {
-				const data = await res.json();
-				recsHasHistory = data.has_history !== false;
-				recommendations = recsHasHistory ? (data.recommendations ?? []) as Recommendation[] : [];
-			}
-		} catch { /* silent */ }
-		recsLoading = false;
-	}
+	// Upsell "tambah media sejenis" di modal checkout + status loyalty brand.
+	let upsell = $state<Recommendation[]>([]);
+	let upsellLoading = $state(false);
+	type Loyalty = {
+		tier_name: string;
+		discount_percent: number;
+		next_tier: { name: string; remaining_tc: number } | null;
+	};
+	let loyalty = $state<Loyalty | null>(null);
 
 	const BOOKMARK_KEY = 'tauthub_client_bookmarked_media';
 	const SELECTED_KEY = 'tauthub_client_selected_media';
@@ -638,6 +630,45 @@
 		campaignOpen = true;
 		if (walletAvailableTc === null) void loadWallet();
 		if (SHOW_PROFILER_FIELD && profilerOptions.length === 0) void loadProfilerOptions();
+		void loadUpsell();
+		void loadLoyalty();
+	}
+
+	// Upsell: media sejenis dengan yang sudah dipilih (tidak butuh riwayat).
+	async function loadUpsell() {
+		if (selectedIds.size === 0) { upsell = []; return; }
+		upsellLoading = true;
+		try {
+			const ids = [...selectedIds].join(',');
+			const res = await apiRequest(`${apiBase}/media/similar?ids=${encodeURIComponent(ids)}&count=4`);
+			if (res.ok) {
+				const data = await res.json();
+				const items = (data.recommendations ?? []) as Recommendation[];
+				upsell = items.filter((m) => !selectedIds.has(m.id));
+			}
+		} catch { /* silent */ }
+		upsellLoading = false;
+	}
+
+	async function loadLoyalty() {
+		try {
+			const res = await apiRequest(`${apiBase}/loyalty`);
+			if (res.ok) loyalty = (await res.json()) as Loyalty;
+		} catch { /* silent */ }
+	}
+
+	// Tambah satu media upsell ke pilihan. Media mungkin di luar 250 baris yang
+	// dimuat, jadi snapshot diisi dari data rekomendasi itu sendiri.
+	function addUpsell(rec: Recommendation) {
+		if (selectedIds.has(rec.id)) return;
+		const next = new Set(selectedIds);
+		next.add(rec.id);
+		selectedSnapshot = {
+			...selectedSnapshot,
+			[rec.id]: { name: rec.name, price: rec.price ?? 0, credits: rec.credit_cost ?? 0 }
+		};
+		selectedIds = next;
+		upsell = upsell.filter((m) => m.id !== rec.id);
 	}
 
 	/**
@@ -667,35 +698,6 @@
 		}
 	}
 
-	/** Media terpilih yang sudah dipesan di kampanye aktif lain (peringatan, bukan blokir). */
-	async function findReservations(): Promise<Array<{ mediaName: string; campaignName: string }>> {
-		if (selectedIds.size === 0) return [];
-		const ACTIVE = new Set(['profiled', 'profiling', 'placement', 'production', 'review', 'scheduled']);
-		try {
-			const res = await apiRequest(`${apiBase}/taut/campaigns?page=1`);
-			if (!res.ok) return [];
-			const data = (await res.json()) as { campaigns?: Array<{ id: string; name: string; taut_status?: string | null }> };
-			const candidates = (data.campaigns ?? []).filter((c) => ACTIVE.has(c.taut_status ?? '')).slice(0, 10);
-			const hits: Array<{ mediaName: string; campaignName: string }> = [];
-			await Promise.all(
-				candidates.map(async (c) => {
-					const r = await apiRequest(`${apiBase}/taut/campaigns/${c.id}/placement`);
-					if (!r.ok) return;
-					const d = (await r.json().catch(() => null)) as { media?: Array<{ media_id?: string }> } | null;
-					for (const item of d?.media ?? []) {
-						const id = item.media_id;
-						if (!id || !selectedIds.has(id)) continue;
-						const m = rows.find((x) => x.id === id);
-						hits.push({ mediaName: m ? domainLabel(m) : 'Media', campaignName: c.name });
-					}
-				})
-			);
-			return hits.slice(0, 6);
-		} catch {
-			return []; // cek gagal bukan penghalang order
-		}
-	}
-
 	onMount(() => {
 		void (async () => {
 			const fresh = await ensureValidSession();
@@ -715,7 +717,6 @@
 			else restoreSelection();
 			selectionHydrated = true;
 			void loadWallet();
-			void loadRecommendations();
 		})();
 		const onExpired = () => void goto('/login');
 		window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -1064,6 +1065,12 @@
 		selectedMedia.reduce((s, m) => s + (m.credit_cost ?? 0), 0) +
 			offViewSelected.reduce((s, id) => s + (selectedSnapshot[id]?.credits ?? 0), 0)
 	);
+	// Diskon loyalty = d% off harga klien (estimasi; charge sebenarnya per-publikasi).
+	const loyaltyPct = $derived(loyalty?.discount_percent ?? 0);
+	const loyaltyCreditsOff = $derived(
+		loyaltyPct > 0 ? totalSelectedCredits - Math.ceil(totalSelectedCredits * (1 - loyaltyPct / 100)) : 0
+	);
+	const payableCredits = $derived(totalSelectedCredits - loyaltyCreditsOff);
 
 	// Daftar media terpilih untuk popover: nama + harga. Baris yang sedang tampil
 	// dipakai langsung; yang di luar tampilan memakai snapshot tersimpan.
@@ -1434,38 +1441,6 @@
 			<Zap size={14} />
 			<span>{tr('Pilih media untuk kampanyemu — setelah ini kamu diarahkan ke produksi artikel: judul, cover, pemeriksaan mutu, lalu terbit ke media.')}</span>
 		</div>
-	{/if}
-
-	<!-- Rekomendasi media personal -->
-	{#if !recsLoading && recsHasHistory && recommendations.length > 0 && !addToCampaignId}
-		<section class="recsSection">
-			<span class="recsLabel">{tr('Rekomendasi untuk Anda')}</span>
-			<div class="recsScroll">
-				{#each recommendations as rec (rec.id)}
-					{@const favDomain = (() => { try { if (rec.website_url) return new URL(rec.website_url.startsWith('http') ? rec.website_url : 'https://' + rec.website_url).hostname; } catch {} return rec.name.includes('.') ? rec.name : ''; })()}
-					<button
-						class="recChip"
-						type="button"
-						onclick={() => {
-							const found = rows.find(m => m.id === rec.id);
-							if (found) detail = found;
-						}}
-					>
-						{#if favDomain}
-							<img
-								class="recFav"
-								src="https://www.google.com/s2/favicons?domain={encodeURIComponent(favDomain)}&sz=32"
-								alt=""
-								width="16"
-								height="16"
-								onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-							/>
-						{/if}
-						<span class="recChipName">{rec.name}</span>
-					</button>
-				{/each}
-			</div>
-		</section>
 	{/if}
 
 	<!-- Top Search & Filter Bar -->
@@ -2371,6 +2346,22 @@
 								</div>
 								<strong>{fmt(totalSelectedPrice)}</strong>
 							</div>
+							{#if loyaltyPct > 0}
+								<div class="campaignSummaryRow">
+									<div class="campaignSummaryLabel">
+										<div class="campaignSummaryIcon"><Zap size={18} /></div>
+										<span>{tr("Diskon")} {loyalty?.tier_name} −{loyaltyPct}%</span>
+									</div>
+									<strong class="campaignDiscountValue">−{fmt(loyaltyCreditsOff * walletRateIdr)}</strong>
+								</div>
+								<div class="campaignSummaryRow">
+									<div class="campaignSummaryLabel">
+										<div class="campaignSummaryIcon"><Database size={18} /></div>
+										<span>{tr("Total setelah diskon")}</span>
+									</div>
+									<strong>{fmt(payableCredits * walletRateIdr)}</strong>
+								</div>
+							{/if}
 							{#if walletAvailableTc !== null}
 								<div class="campaignSummaryRow">
 									<div class="campaignSummaryLabel">
@@ -2382,11 +2373,11 @@
 							{/if}
 						</div>
 						{#if walletAvailableTc !== null}
-							{#if totalSelectedCredits > walletAvailableTc}
+							{#if payableCredits > walletAvailableTc}
 								<div class="campaignBalanceBadge campaignBalanceBadgeLow">
 									<Info size={16} />
 									<span>
-										{tr("Saldo kurang")} {fmt((totalSelectedCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")}
+										{tr("Saldo kurang")} {fmt((payableCredits - walletAvailableTc) * walletRateIdr)} {tr("untuk pesanan ini.")}
 										<a href={`/klien/${brandUrl}/credits`} onclick={openTopUpFromBar}>{tr("Top Up dulu")}</a>
 									</span>
 								</div>
@@ -2402,6 +2393,31 @@
 							{/if}
 
 						
+					{#if upsell.length > 0}
+						<div class="upsellRow">
+							<span class="upsellLabel">{tr("Tambah media sejenis")}</span>
+							<div class="recsScroll">
+								{#each upsell as rec (rec.id)}
+									{@const favDomain = (() => { try { if (rec.website_url) return new URL(rec.website_url.startsWith('http') ? rec.website_url : 'https://' + rec.website_url).hostname; } catch {} return rec.name.includes('.') ? rec.name : ''; })()}
+									<button class="recChip" type="button" onclick={() => addUpsell(rec)}>
+										<Plus size={13} class="upsellPlus" />
+										{#if favDomain}
+											<img
+												class="recFav"
+												src="https://www.google.com/s2/favicons?domain={encodeURIComponent(favDomain)}&sz=32"
+												alt=""
+												width="16"
+												height="16"
+												onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+											/>
+										{/if}
+										<span class="recChipName">{rec.name}</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
 					<label class="modalField">
 						<span>{tr("Nama Kampanye")} <span class="campaignSummaryMuted">{tr("opsional")}</span></span>
 						<input
@@ -3053,28 +3069,13 @@
 			padding: 1px 7px;
 			font-size: 11.5px;
 		}
-		/* --- Rekomendasi media personal --- */
-		.recsSection {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			padding: 6px 4px;
-			overflow: hidden;
-		}
-		.recsLabel {
-			font-size: 12px;
-			font-weight: 600;
-			color: var(--muted-foreground);
-			white-space: nowrap;
-			flex-shrink: 0;
-		}
+		/* --- Chip media (dipakai baris upsell di modal kampanye) --- */
 		.recsScroll {
 			display: flex;
+			flex-wrap: wrap;
 			gap: 6px;
-			overflow-x: auto;
-			scrollbar-width: none;
+			min-width: 0;
 		}
-		.recsScroll::-webkit-scrollbar { display: none; }
 		.recChip {
 			flex: 0 0 auto;
 			display: flex;
@@ -3101,5 +3102,23 @@
 			font-size: 12.5px;
 			font-weight: 500;
 			color: var(--foreground);
+		}
+		/* Baris upsell "tambah media sejenis" di dalam modal kampanye. */
+		.upsellRow {
+			display: grid;
+			gap: 6px;
+			margin: 10px 0 2px;
+		}
+		.upsellLabel {
+			font-size: 12px;
+			font-weight: 600;
+			color: var(--muted-foreground);
+		}
+		:global(.upsellPlus) {
+			color: var(--primary, #2563eb);
+			flex-shrink: 0;
+		}
+		.campaignDiscountValue {
+			color: var(--success, #15803d);
 		}
 </style>

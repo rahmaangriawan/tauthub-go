@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/rahmaangriawan/tauthub-go/internal/httpx"
@@ -12,6 +13,23 @@ import (
 // media.go: port app/v1/brands/[brandId]/{media/recommendations,
 // media/[mediaId]/crawl-status, media/[mediaId]/seo, media-packages,
 // packages}/route.ts.
+
+// catalogMediaSelectSQL: SELECT katalog media + agregat publikasi (dipakai
+// rekomendasi & upsell "sejenis").
+const catalogMediaSelectSQL = `
+	SELECT m.id, m.name, m.slug, m.category, m.media_tier, m.website_url, m.price, m.credit_cost,
+	       m.integration_type, m.health_score, m.traffic_estimate, m.status, m.dewan_pers_verified,
+	       COALESCE(stats.pub_count, 0)::int AS pub_count,
+	       COALESCE(stats.rej_count, 0)::int AS rej_count
+	FROM media m
+	LEFT JOIN (
+	  SELECT media_id,
+	         COUNT(*) FILTER (WHERE status = 'published')::int AS pub_count,
+	         COUNT(*) FILTER (WHERE status = 'partner_rejected')::int AS rej_count
+	  FROM publications GROUP BY media_id
+	) stats ON stats.media_id = m.id
+	WHERE m.status IN ('active','draft','pending_review')
+	ORDER BY m.name ASC`
 
 // ---------- media/recommendations ----------
 
@@ -135,20 +153,7 @@ func (d *Deps) bsRecommendMedia(ctx context.Context, brandID string, category st
 
 	hist := d.bsLoadBrandMediaHistory(ctx, brandID)
 
-	rows, err := d.queryRows(ctx, `
-		SELECT m.id, m.name, m.slug, m.category, m.media_tier, m.website_url, m.price, m.credit_cost,
-		       m.integration_type, m.health_score, m.traffic_estimate, m.status, m.dewan_pers_verified,
-		       COALESCE(stats.pub_count, 0)::int AS pub_count,
-		       COALESCE(stats.rej_count, 0)::int AS rej_count
-		FROM media m
-		LEFT JOIN (
-		  SELECT media_id,
-		         COUNT(*) FILTER (WHERE status = 'published')::int AS pub_count,
-		         COUNT(*) FILTER (WHERE status = 'partner_rejected')::int AS rej_count
-		  FROM publications GROUP BY media_id
-		) stats ON stats.media_id = m.id
-		WHERE m.status IN ('active','draft','pending_review')
-		ORDER BY m.name ASC`)
+	rows, err := d.queryRows(ctx, catalogMediaSelectSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +337,180 @@ func bsHealthVal(v *float64) float64 {
 		return 0
 	}
 	return *v
+}
+
+// ---------- media/similar (upsell checkout) ----------
+
+// MediaSimilar: GET /v1/brands/{brandId}/media/similar?ids=a,b&count=3
+// Media mirip dengan yang SUDAH dipilih (kategori/tier/harga). Berbeda dari
+// recommendations: tidak bergantung riwayat publikasi, jadi tetap jalan untuk
+// brand baru saat checkout.
+func (d *Deps) MediaSimilar(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	if _, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer"); err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	q := r.URL.Query()
+	ids := []string{}
+	if raw := q.Get("ids"); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			if p := strings.TrimSpace(part); p != "" {
+				ids = append(ids, p)
+			}
+		}
+	}
+	count := bsNumClampInt(bsQueryNumber(q, "count", 3), 1, 10)
+	if len(ids) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"recommendations": []any{}})
+		return
+	}
+	recs, err := d.bsSimilarMedia(r.Context(), ids, count)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"recommendations": recs})
+}
+
+// bsSimilarMedia: skor media katalog terhadap profil (kategori/tier/harga) dari
+// set media terpilih. Hanya media dengan kecocokan nyata (skor > 0) yang
+// dikembalikan — bukan pengisi acak.
+func (d *Deps) bsSimilarMedia(ctx context.Context, selectedIDs []string, count int) ([]map[string]any, error) {
+	exclude := map[string]bool{}
+	for _, id := range selectedIDs {
+		exclude[id] = true
+	}
+
+	// Profil seleksi: kategori, tier, rata-rata harga.
+	ph := make([]string, len(selectedIDs))
+	args := make([]any, len(selectedIDs))
+	for i, id := range selectedIDs {
+		args[i] = id
+		ph[i] = "$" + itoa(i+1)
+	}
+	selRows, err := d.queryRows(ctx,
+		"SELECT category, media_tier, price FROM media WHERE id IN ("+strings.Join(ph, ", ")+")", args...)
+	if err != nil {
+		return nil, err
+	}
+	cats := map[string]bool{}
+	tiers := map[string]bool{}
+	totalPrice := 0.0
+	priceN := 0
+	for _, row := range selRows {
+		if c := strings.ToLower(strings.TrimSpace(row.strOr("category", ""))); c != "" {
+			cats[c] = true
+		}
+		if t := strings.ToLower(strings.TrimSpace(row.strOr("media_tier", ""))); t != "" {
+			tiers[t] = true
+		}
+		if p := row.numOr("price"); p > 0 {
+			totalPrice += p
+			priceN++
+		}
+	}
+	avgPrice := 0.0
+	if priceN > 0 {
+		avgPrice = totalPrice / float64(priceN)
+	}
+
+	rows, err := d.queryRows(ctx, catalogMediaSelectSQL)
+	if err != nil {
+		return nil, err
+	}
+
+	scored := []mediaRecommendationRow{}
+	for _, row := range rows {
+		id := row.strOr("id", "")
+		if exclude[id] {
+			continue
+		}
+		price := row.numOr("price")
+		if price <= 0 {
+			continue // tak bisa dipesan tanpa harga
+		}
+		nameLower := strings.ToLower(row.strOr("name", ""))
+		if strings.Contains(nameLower, "smoke") || strings.Contains(nameLower, "test") {
+			continue // buang media uji dari upsell
+		}
+		var health *float64
+		if row.has("health_score") {
+			v := row.numOr("health_score")
+			health = &v
+		}
+
+		score := 0.0
+		reasons := []string{}
+		mediaCat := strings.ToLower(row.strOr("category", ""))
+		if mediaCat != "" && cats[mediaCat] {
+			score += 40
+			reasons = append(reasons, "Kategori sama")
+		}
+		mediaTier := strings.ToLower(row.strOr("media_tier", ""))
+		if mediaTier != "" && tiers[mediaTier] {
+			score += 20
+			reasons = append(reasons, "Tier serupa")
+		}
+		if avgPrice > 0 {
+			ratio := price / avgPrice
+			if ratio >= 0.5 && ratio <= 1.5 {
+				score += 15
+				reasons = append(reasons, "Harga sebanding")
+			}
+		}
+		if score <= 0 {
+			continue // tanpa kecocokan nyata, bukan "sejenis"
+		}
+		if health != nil {
+			score += (*health / 100) * 15
+			if *health >= 70 {
+				reasons = append(reasons, "Kesehatan media "+bsNumberToString(*health)+"/100")
+			}
+		}
+
+		status := row.strOr("status", "")
+		var availabilityReason any
+		if status == "pending_review" {
+			availabilityReason = "Menunggu Review Admin"
+		}
+		scored = append(scored, mediaRecommendationRow{
+			Score: math.Round(score), Health: health,
+			Fields: map[string]any{
+				"id": row.raw("id"), "name": row.raw("name"), "slug": row.raw("slug"),
+				"category": row.raw("category"), "website_url": row.raw("website_url"),
+				"price": price, "credit_cost": row.numOr("credit_cost"),
+				"integration_type": row.strOr("integration_type", "manual"),
+				"health_score":     health, "traffic_estimate": row.numOr("traffic_estimate"),
+				"score": math.Round(score), "reasons": reasons, "fit": "category",
+				"status":              row.strOr("status", "active"),
+				"is_available":        status == "active",
+				"availability_reason": availabilityReason,
+				"dewan_pers_verified": row.boolOr("dewan_pers_verified", false),
+			},
+		})
+	}
+
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].Score != scored[j].Score {
+			return scored[i].Score > scored[j].Score
+		}
+		return bsHealthVal(scored[i].Health) > bsHealthVal(scored[j].Health)
+	})
+
+	limit := count
+	if limit > len(scored) {
+		limit = len(scored)
+	}
+	out := make([]map[string]any, 0, limit)
+	for _, item := range scored[:limit] {
+		out = append(out, item.Fields)
+	}
+	return out, nil
 }
 
 // ---------- media/[mediaId]/crawl-status ----------
