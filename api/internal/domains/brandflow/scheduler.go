@@ -469,13 +469,18 @@ func (d *Deps) schMarkOccurrenceFailed(ctx context.Context, occurrenceID, messag
 // schEnqueueDuePublications: publikasi dengan scheduled_at <= NOW() dan status
 // non-terminal yang belum punya job hidup → enqueue publication_execution
 // (maxAttempts 3), dedupe lewat payload->>'publicationId'.
+//
+// Hanya status yang benar-benar diproses worker (pending, retrying) yang
+// disapu. waiting_partner dan partner_approved sengaja tidak ikut: worker
+// langsung return nil untuk keduanya, sehingga job selesai seketika dan
+// sweeper mengantre ulang tiap siklus (±6 ribu baris jobs per hari).
 func (d *Deps) schEnqueueDuePublications(ctx context.Context, limit int) int {
 	due, err := d.queryRows(ctx, `
 		SELECT p.id, p.brand_id
 		FROM publications p
 		WHERE p.scheduled_at IS NOT NULL
 		  AND p.scheduled_at <= NOW()
-		  AND p.status IN ('pending','waiting_partner','partner_approved','retrying')
+		  AND p.status IN ('pending','retrying')
 		  AND NOT EXISTS (
 		    SELECT 1 FROM jobs j
 		    WHERE j.kind = 'publication_execution'
