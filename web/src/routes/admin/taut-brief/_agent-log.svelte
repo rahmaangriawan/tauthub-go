@@ -3,6 +3,8 @@
 	import { apiRequest, readApiError } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
 	import { onMount } from 'svelte';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	// Tabel log run satu agent (atau beberapa agent sekaligus) dengan paginasi
 	// keyset + lazy load. Dipakai bersama oleh halaman agent Taut Brief supaya
@@ -95,6 +97,42 @@
 		io.observe(sentinel);
 		return () => io.disconnect();
 	});
+
+	// Salin semua baris yang sudah termuat; detail hanya untuk baris yang sedang dibuka.
+	function toMarkdown(): string {
+		const sections: string[] = [
+			mdList([
+				['Agent', agents.join(', ')],
+				['Baris dimuat', logs.length],
+				['Masih ada halaman berikutnya', nextBefore ? 'Ya' : 'Tidak']
+			]),
+			mdTable(
+				['Waktu', 'Brand', 'Brief', 'Status', 'Model', 'Token (in/out)', 'Durasi', 'Run ID'],
+				logs.map((r) => [
+					r.created_at ? fmtDateTime(r.created_at) : '',
+					r.brand_name,
+					r.profile_name,
+					r.status,
+					r.model,
+					`${r.token_input ?? 0} / ${r.token_output ?? 0}`,
+					r.duration_ms ? `${Math.round(r.duration_ms / 1000)} dtk` : '',
+					r.id
+				])
+			)
+		];
+		const open = logs.find((r) => r.id === openId);
+		if (open) {
+			const failed = open.status === 'failed';
+			sections.push(
+				`## Detail run ${open.id}`,
+				'### Bahan yang dikirim ke agent',
+				mdCode(open.input_preview || '—'),
+				failed ? '### Pesan error' : '### Output agent',
+				mdCode(failed ? open.error || 'Tidak ada pesan error.' : open.output_preview || '—')
+			);
+		}
+		return mdReport('Log Pemakaian Agent', ...sections);
+	}
 </script>
 
 <section class="app-card mt-4 p-5">
@@ -105,9 +143,12 @@
 				{tr('Token, durasi, error, dan preview bahan/output tiap run agent ini.')}
 			</p>
 		</div>
-		<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={loading} onclick={() => void load()}>
-			{tr('Muat ulang')}
-		</button>
+		<div class="flex flex-wrap items-center gap-2">
+			<CopyMarkdownButton build={toMarkdown} disabled={loading || logs.length === 0} />
+			<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={loading} onclick={() => void load()}>
+				{tr('Muat ulang')}
+			</button>
+		</div>
 	</div>
 
 	{#if error}

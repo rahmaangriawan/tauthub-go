@@ -11,6 +11,8 @@
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	type Summary = { alerts: string[]; running_batches: number; dead_letter_items: number };
 	type Batch = {
@@ -119,6 +121,73 @@
 
 	const visibleBatches = $derived(batches.slice(batchOffset, batchOffset + PAGE_SIZE));
 	const visibleDead = $derived(dead.slice(deadOffset, deadOffset + PAGE_SIZE));
+
+	// Salin tab yang sedang aktif (halaman tabel aktif ikut) sebagai Markdown.
+	function toMarkdown(): string {
+		const s = summary;
+		if (!s) return '';
+		if (tab === 'alerts') {
+			return mdReport(
+				'Operations - Alerts',
+				mdList([['Jumlah alert', s.alerts.length]]),
+				s.alerts.length ? s.alerts.map((a) => `- ${a.replace(/\r?\n+/g, ' ')}`).join('\n') : '_Tidak ada alert aktif._'
+			);
+		}
+		if (tab === 'batches') {
+			return mdReport(
+				'Operations - Running batches',
+				mdList([
+					['Total batch', batches.length],
+					['Ditampilkan', visibleBatches.length ? `${batchOffset + 1}-${batchOffset + visibleBatches.length}` : '0']
+				]),
+				mdTable(
+					['Batch ID', 'Batch', 'Status', 'Owner', 'Brand', 'Items', 'Updated'],
+					visibleBatches.map((b) => [b.id, b.name, b.status, b.brand_owner_email, b.brand_name, b.total_items, fmtDateTime(b.updated_at)])
+				)
+			);
+		}
+		if (tab === 'dead') {
+			const withMsg = visibleDead.filter((d) => d.error_message);
+			return mdReport(
+				'Operations - Dead letters',
+				mdList([
+					['Total item', dead.length],
+					['Ditampilkan', visibleDead.length ? `${deadOffset + 1}-${deadOffset + visibleDead.length}` : '0']
+				]),
+				mdTable(
+					['Item ID', 'Batch', 'Row', 'Brand', 'Owner', 'Kategori error', 'Retry', 'Updated'],
+					visibleDead.map((d) => [
+						d.id,
+						d.batch_name,
+						d.row_number,
+						d.brand_name,
+						d.brand_owner_email,
+						d.error_category || 'unknown',
+						`${d.retry_count}/3`,
+						fmtDateTime(d.updated_at)
+					])
+				),
+				withMsg.length
+					? '## Pesan error\n\n' + withMsg.map((d) => `**${d.id}** (${d.batch_name} row ${d.row_number})\n\n${mdCode(d.error_message ?? '')}`).join('\n\n')
+					: ''
+			);
+		}
+		const withErr = queue.filter((q) => q.last_error);
+		return mdReport(
+			'Operations - Queue gagal (24 jam)',
+			mdList([
+				['Jenis job', queue.length],
+				['Total kegagalan', queue.reduce((n, q) => n + q.failures, 0)]
+			]),
+			mdTable(
+				['Jenis Job', 'Kegagalan (24 jam)', 'Terakhir'],
+				queue.map((q) => [q.kind, q.failures, fmtDateTime(q.last_at)])
+			),
+			withErr.length
+				? '## Error terakhir\n\n' + withErr.map((q) => `**${q.kind}**\n\n${mdCode(q.last_error)}`).join('\n\n')
+				: ''
+		);
+	}
 </script>
 
 <section>
@@ -127,6 +196,7 @@
 		description={tr("Investigasi alert, batch aktif, dan item yang keluar dari retry pipeline.")}
 	>
 		<Badge tone={(summary?.alerts.length ?? 0) > 0 ? 'warning' : 'success'} label="{summary?.alerts.length ?? 0} alerts" />
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || !summary} />
 	</PageHeader>
 
 	<Feedback {loading} {error} loadingText="Memuat platform operations…" />

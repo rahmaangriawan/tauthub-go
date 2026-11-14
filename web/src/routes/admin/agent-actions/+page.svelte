@@ -11,6 +11,8 @@
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	type Action = {
 		id: string;
@@ -115,6 +117,81 @@
 				return 'neutral';
 		}
 	}
+
+	// Field sensitif pada params/result tidak ikut disalin.
+	const SENSITIVE_KEY = /pass(word|wd)?|secret|token|api[_-]?key|authorization|credential|private[_-]?key|sealed|cookie|signature/i;
+	function redact(value: unknown, found: Set<string>): unknown {
+		if (Array.isArray(value)) return value.map((v) => redact(v, found));
+		if (value && typeof value === 'object') {
+			const out: Record<string, unknown> = {};
+			for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+				if (SENSITIVE_KEY.test(k)) {
+					found.add(k);
+					out[k] = '[DIREDAKSI]';
+				} else out[k] = redact(v, found);
+			}
+			return out;
+		}
+		return value;
+	}
+
+	// Salin halaman daftar yang sedang tampil (filter dan halaman ikut).
+	function toMarkdown(): string {
+		const statusLabel = STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+		return mdReport(
+			'Aksi Agent',
+			mdList([
+				['Total cocok', data.total],
+				['Ditampilkan', data.items.length ? `${offset + 1}-${offset + data.items.length}` : '0'],
+				['Filter status', status ? statusLabel : ''],
+				['Filter tool', tool]
+			]),
+			mdTable(
+				['Waktu', 'ID', 'Tool', 'Kode', 'Ringkasan', 'Status', 'Disetujui', 'Error'],
+				data.items.map((a) => [
+					fmtDateTime(a.created_at),
+					a.id,
+					a.tool,
+					a.code,
+					a.summary,
+					a.status,
+					a.approver_email || a.approved_by,
+					a.error
+				])
+			)
+		);
+	}
+
+	// Salin detail satu aksi yang sedang dibuka di dialog.
+	function detailToMarkdown(): string {
+		const d = detail;
+		if (!d) return '';
+		const found = new Set<string>();
+		const params = redact(d.params ?? {}, found);
+		const result = d.result ? redact(d.result, found) : null;
+		return mdReport(
+			`Aksi Agent ${d.code}`,
+			mdList([
+				['ID', d.id],
+				['Tool', d.tool],
+				['Kode', d.code],
+				['Status', d.status],
+				['Klien agent', d.client_name],
+				['Izin diperlukan', d.required_permission],
+				['Dibuat', fmtDateTime(d.created_at)],
+				['Kedaluwarsa', fmtDateTime(d.expires_at)],
+				['Diputuskan', d.decided_at ? fmtDateTime(d.decided_at) : null],
+				['Dieksekusi', d.executed_at ? fmtDateTime(d.executed_at) : null],
+				['Oleh admin', d.approver_email || d.approved_by],
+				['Error', d.error]
+			]),
+			'## Ringkasan\n\n' + mdCode(d.summary),
+			'## Parameter\n\n' +
+				(found.size ? `_Field sensitif diredaksi: ${[...found].join(', ')}_\n\n` : '') +
+				mdCode(JSON.stringify(params, null, 2), 'json'),
+			result ? '## Hasil\n\n' + mdCode(JSON.stringify(result, null, 2), 'json') : ''
+		);
+	}
 </script>
 
 <section>
@@ -123,6 +200,7 @@
 		description="Aksi admin yang diusulkan Hermes / Claude Code via MCP. Persetujuan dilakukan di bot Telegram; halaman ini untuk melihat status dan histori."
 	>
 		<Badge tone="accent" label="{data.total.toLocaleString('id-ID')} aksi" />
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || data.items.length === 0} />
 	</PageHeader>
 
 	<Feedback {loading} {error} loadingText="Memuat aksi agent…" />
@@ -226,6 +304,7 @@
 			<div class="app-card w-full max-w-3xl overflow-hidden">
 				<div class="flex items-center justify-between border-b px-4 py-3">
 					<h2 class="text-lg font-medium">Detail aksi agent</h2>
+					<CopyMarkdownButton build={detailToMarkdown} disabled={detailLoading || !detail} />
 					<button
 						class="app-btn app-btn-soft"
 						type="button"

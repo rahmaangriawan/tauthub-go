@@ -6,6 +6,8 @@
 	import { onMount } from 'svelte';
 	import { apiRequest, readApiError } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	// Log pemakaian khusus dua agent AI Media Matchmaker (peringkas brief +
 	// pemilih media): token, durasi, error, dan preview input/output.
@@ -118,6 +120,44 @@
 		io.observe(sentinel);
 		return () => io.disconnect();
 	});
+
+	// Salin semua baris yang sudah termuat; detail hanya untuk baris yang sedang dibuka.
+	function toMarkdown(): string {
+		const sections: string[] = [
+			mdList([
+				['Total run', stats.total],
+				['Gagal', stats.failed],
+				['Token masuk', stats.tokIn.toLocaleString('id-ID')],
+				['Token keluar', stats.tokOut.toLocaleString('id-ID')],
+				['Durasi rata-rata', `${stats.avgDur} dtk`],
+				['Masih ada halaman berikutnya', nextBefore ? 'Ya' : 'Tidak']
+			]),
+			mdTable(
+				['Waktu', 'Agent', 'Brand', 'Status', 'Model', 'Token (in → out)', 'Durasi', 'Run ID'],
+				logs.map((l) => [
+					l.created_at ? fmtDateTime(l.created_at) : '',
+					agentLabel(l.agent),
+					l.brand_name,
+					l.status === 'failed' ? 'Gagal' : 'Sukses',
+					l.model,
+					`${(l.token_input ?? 0).toLocaleString('id-ID')} → ${(l.token_output ?? 0).toLocaleString('id-ID')}`,
+					l.duration_ms ? `${Math.round(l.duration_ms / 1000)} dtk` : '',
+					l.id
+				])
+			)
+		];
+		const open = logs.find((l) => l.id === openId);
+		if (open) {
+			sections.push(
+				`## Detail run ${open.id}`,
+				'### Bahan yang dikirim ke agent',
+				mdCode(open.input_preview || '—'),
+				'### Output agent',
+				mdCode(open.status === 'failed' ? open.error || 'Tidak ada pesan error.' : open.output_preview || '—')
+			);
+		}
+		return mdReport('Log Agent Matchmaker', ...sections);
+	}
 </script>
 
 <section>
@@ -129,7 +169,9 @@
 		<PageHeader
 			title={tr('Log Agent Matchmaker')}
 			description={tr('Pemakaian token, durasi, dan error dua agent AI Media Matchmaker (ringkasan brief & pemilih media).')}
-		/>
+		>
+			<CopyMarkdownButton build={toMarkdown} disabled={loading || logs.length === 0} />
+		</PageHeader>
 
 		<Feedback {loading} {error} loadingText={tr('Memuat log…')} />
 

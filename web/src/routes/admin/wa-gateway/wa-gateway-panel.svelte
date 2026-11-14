@@ -13,6 +13,8 @@
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList } from '$lib/copy-markdown';
 
 	type WaConfig = {
 		configured: boolean;
@@ -428,6 +430,57 @@
 	}
 
 	const truncate = (value: string, max: number) => (value.length > max ? `${value.slice(0, max)}…` : value);
+
+	// Salin monitoring WA yang sedang tampil (filter dan halaman ikut) sebagai Markdown.
+	// Tujuan memakai maskTarget seperti di layar; isi pesan tidak ikut karena tidak tampil di tabel.
+	function toMarkdown(): string {
+		const m = monitor;
+		if (!m) return '';
+		const periodLabel = PERIOD_OPTIONS.find((o) => o.value === monDays)?.label ?? monDays;
+		const eventLabel = m.by_event.find((ev) => ev.event === monEvent)?.label ?? monEvent;
+		const pageSize = m.page_size ?? 20;
+		const start = (monPage - 1) * pageSize;
+		return mdReport(
+			'Monitoring WA Gateway',
+			mdList([
+				['Periode', periodLabel],
+				['Filter status', monStatus ? (STATUS_LABEL[monStatus] ?? monStatus) : ''],
+				['Filter event', eventLabel],
+				['Pencarian', monSearch.trim()],
+				['Total', m.summary.total],
+				['Terkirim', m.summary.sent],
+				['Gagal', m.summary.failed],
+				['Menunggu', m.summary.queued],
+				['Tingkat sukses', m.summary.success_rate == null ? '' : `${m.summary.success_rate}%`],
+				['Entri cocok', m.total_filtered],
+				['Ditampilkan', m.items.length ? `${start + 1}-${start + m.items.length}` : '0']
+			]),
+			'## Error tersering',
+			mdTable(
+				['Error', 'Jumlah'],
+				m.top_errors.map((e) => [e.error, e.total])
+			),
+			'## Per event',
+			mdTable(
+				['Event', 'Total', 'Terkirim', 'Gagal'],
+				m.by_event.map((e) => [e.label, e.total, e.sent, e.failed])
+			),
+			'## Riwayat pengiriman',
+			mdTable(
+				['Waktu', 'Status', 'Event', 'Tujuan', 'Percobaan', 'Referensi', 'Terkirim', 'Error'],
+				m.items.map((item) => [
+					fmtDateTime(item.created_at),
+					STATUS_LABEL[item.status] ?? item.status,
+					item.label,
+					maskTarget(item.target),
+					item.attempts,
+					item.reference_id,
+					item.sent_at ? fmtDateTime(item.sent_at) : '',
+					item.last_error
+				])
+			)
+		);
+	}
 </script>
 
 <section>
@@ -791,7 +844,10 @@
 				<div class="app-card p-4">
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<h3 class="text-sm font-medium">{tr("Riwayat pengiriman")}</h3>
-						<span class="text-xs text-muted-foreground">{monitor?.total_filtered ?? 0} entri</span>
+						<div class="flex items-center gap-3">
+							<span class="text-xs text-muted-foreground">{monitor?.total_filtered ?? 0} entri</span>
+							<CopyMarkdownButton build={toMarkdown} disabled={monitorLoading || !monitor || monitor.items.length === 0} />
+						</div>
 					</div>
 
 					{#if !monitor || monitor.items.length === 0}

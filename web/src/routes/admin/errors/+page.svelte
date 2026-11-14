@@ -12,6 +12,8 @@
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	type PublicationError = {
 		id: string;
@@ -163,6 +165,115 @@
 	const total = $derived(
 		publications.length + jobs.length + rss.length + queue.length + variantBatches.length
 	);
+
+	// Salin semua bagian sekaligus (seluruh baris hasil pencarian aktif, bukan hanya
+	// halaman tabel yang tampil) supaya satu tempelan cukup untuk debugging.
+	function toMarkdown(): string {
+		const q = search.trim();
+		const sec = (title: string, count: number, body: string) => `## ${title} (${count})\n\n${body}`;
+		const longErrors = (rows: { id: string; msg: string | null }[]) => {
+			const withMsg = rows.filter((r) => r.msg);
+			return withMsg.length
+				? '\n\n' + withMsg.map((r) => `**${r.id}**\n\n${mdCode(r.msg ?? '')}`).join('\n\n')
+				: '';
+		};
+		return mdReport(
+			'Error Reports',
+			mdList([
+				['Pencarian', q],
+				['Total error', total],
+				['Peringatan pengiriman', warnings.length]
+			]),
+			sec(
+				'Publikasi gagal / retry',
+				publications.length,
+				mdTable(
+					['Publication ID', 'Artikel', 'Brand', 'Media', 'Status', 'Kode error', 'HTTP', 'Waktu'],
+					publications.map((r) => [
+						r.id,
+						r.document_title,
+						r.brand_name,
+						r.media_name,
+						r.status,
+						r.error_code,
+						r.http_status,
+						fmtDateTime(r.updated_at)
+					])
+				) + longErrors(publications.map((r) => ({ id: r.id, msg: r.error_message })))
+			),
+			sec(
+				'Job distribusi gagal (queue)',
+				jobs.length,
+				mdTable(
+					['Job ID', 'Publication ID', 'Artikel', 'Media', 'Attempts', 'Kode error', 'HTTP', 'Waktu'],
+					jobs.map((r) => [
+						r.id,
+						r.publication_id,
+						r.document_title,
+						r.media_name,
+						r.attempts,
+						r.error_code,
+						r.http_status,
+						fmtDateTime(r.updated_at)
+					])
+				) + longErrors(jobs.map((r) => ({ id: r.id, msg: r.error_message })))
+			),
+			sec(
+				'Batch variant gagal / sebagian',
+				variantBatches.length,
+				mdTable(
+					['Batch ID', 'Brand', 'Mode', 'Status', 'Gagal/Total', 'Media gagal', 'Waktu'],
+					variantBatches.map((r) => [
+						r.id,
+						r.brand_name,
+						r.mode,
+						r.status,
+						`${r.failed}/${r.total}`,
+						r.failed_media,
+						fmtDateTime(r.updated_at)
+					])
+				)
+			),
+			sec(
+				'Peringatan pengiriman',
+				warnings.length,
+				mdTable(
+					['ID', 'Publication ID', 'Artikel', 'Media', 'Status', 'Waktu'],
+					warnings.map((r) => [
+						r.id,
+						r.publication_id,
+						r.document_title,
+						r.media_name,
+						r.status,
+						fmtDateTime(r.updated_at)
+					])
+				) + longErrors(warnings.map((r) => ({ id: r.id, msg: r.warning_message })))
+			),
+			sec(
+				'RSS gagal verifikasi',
+				rss.length,
+				mdTable(
+					['Feed ID', 'Feed', 'Partner', 'Media', 'Install status', 'Waktu'],
+					rss.map((r) => [
+						r.id,
+						r.name,
+						r.partner_name,
+						r.media_name,
+						r.install_status,
+						fmtDateTime(r.updated_at)
+					])
+				) + longErrors(rss.map((r) => ({ id: r.id, msg: r.install_error })))
+			),
+			sec(
+				'Queue generic gagal',
+				queue.length,
+				mdTable(
+					['Job ID', 'Kind', 'Status', 'Attempts', 'Waktu'],
+					queue.map((r) => [r.id, r.kind, r.status, r.attempts, fmtDateTime(r.updated_at)])
+				) + longErrors(queue.map((r) => ({ id: r.id, msg: r.last_error })))
+			)
+		);
+	}
 </script>
 
 <section>
@@ -171,6 +282,10 @@
 		description={tr("Agregasi error distribusi, queue, dan verifikasi RSS. Klien/mitra tidak melihat halaman ini — Tauthub yang bertindak.")}
 	>
 		<Badge tone={total > 0 ? 'danger' : 'success'} label="{total} error" />
+		<CopyMarkdownButton
+			build={toMarkdown}
+			disabled={loading || total + warnings.length === 0}
+		/>
 	</PageHeader>
 
 	<div class="mt-4 flex flex-wrap items-center gap-2">

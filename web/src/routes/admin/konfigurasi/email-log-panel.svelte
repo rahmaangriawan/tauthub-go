@@ -11,6 +11,8 @@
 	import { apiRequest, ensureValidSession } from '$lib/auth';
 	import { fmtDateTime, fmtNum } from '$lib/admin-format';
 	import { platformError } from '../_platform';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList } from '$lib/copy-markdown';
 
 	type Item = {
 		id: string;
@@ -99,6 +101,42 @@
 	});
 
 	const queuedCount = $derived((summary.queued ?? 0) + (summary.sending ?? 0) + (summary.rate_limited ?? 0));
+
+	// Salin log email yang sedang tampil (filter dan halaman ikut) sebagai Markdown.
+	function toMarkdown(): string {
+		const templateLabel = templates.find((t) => t.template === template)?.label ?? template;
+		return mdReport(
+			'Log Pengiriman Email',
+			mdList([
+				['Terkirim', summary.sent ?? 0],
+				['Gagal', summary.failed ?? 0],
+				['Antre', queuedCount],
+				['Dilewati', summary.skipped ?? 0],
+				['Total cocok', total],
+				['Ditampilkan', items.length ? `${offset + 1}-${offset + items.length}` : '0'],
+				['Filter status', status ? (STATUS_LABEL[status] ?? status) : ''],
+				['Filter jenis email', templateLabel],
+				['Filter penerima', role ? roleLabel(role) : ''],
+				['Pencarian', query.trim()]
+			]),
+			mdTable(
+				['Waktu', 'Penerima', 'Peran', 'Nama', 'Jenis email', 'Subjek', 'Template', 'Status', 'Percobaan', 'Kode error', 'Pesan error'],
+				items.map((row) => [
+					fmtDateTime(row.sent_at ?? row.created_at),
+					row.recipient_email,
+					roleLabel(row.recipient_role),
+					row.recipient_name,
+					row.template_label,
+					row.subject,
+					row.template,
+					STATUS_LABEL[row.status] ?? row.status,
+					row.status !== 'sent' && row.attempts > 0 ? `${row.attempts}/${row.max_attempts}` : '',
+					row.error_code,
+					row.error_message
+				])
+			)
+		);
+	}
 </script>
 
 <div class="flex flex-col gap-4">
@@ -121,10 +159,15 @@
 
 	<div class="app-card overflow-x-auto">
 		<div class="border-b px-5 py-4" style="border-color: var(--border);">
-			<h2 class="text-sm font-medium">{tr('Log pengiriman email')}</h2>
-			<p class="mt-0.5 text-xs text-muted-foreground">
-				{tr('Email yang dikirim sistem ke mitra dan klien. Email gagal menampilkan sebab dari server email.')}
-			</p>
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h2 class="text-sm font-medium">{tr('Log pengiriman email')}</h2>
+					<p class="mt-0.5 text-xs text-muted-foreground">
+						{tr('Email yang dikirim sistem ke mitra dan klien. Email gagal menampilkan sebab dari server email.')}
+					</p>
+				</div>
+				<CopyMarkdownButton build={toMarkdown} disabled={loading || items.length === 0} />
+			</div>
 		</div>
 
 		<div class="flex flex-wrap items-center gap-2 px-5 py-3">

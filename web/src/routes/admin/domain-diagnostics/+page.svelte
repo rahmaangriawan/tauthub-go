@@ -13,6 +13,8 @@
 	import Select from '$lib/components/select.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	const PAGE_SIZE = 20;
 
@@ -184,6 +186,61 @@
 
 	const pageRows = $derived(rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
 	const showAccess = $derived(rows.length === 0 && error.includes('Akses platform'));
+
+	// Salin seluruh hasil diagnostik yang termuat (semua halaman, filter ikut).
+	function toMarkdown(): string {
+		const s = summary;
+		const sections: string[] = [
+			mdList([
+				['Filter sebab', filterResult ? (RESULT_META[filterResult]?.label ?? filterResult) : 'Perlu perhatian'],
+				['Pencarian', appliedQuery],
+				['Jumlah domain', rows.length]
+			])
+		];
+		if (s) {
+			sections.push(
+				'## Ringkasan\n\n' +
+					mdList([
+						['Diblokir server (WAF/jaringan)', s.blocked_by_waf],
+						['Sertifikat TLS bermasalah', s.tls_error],
+						['Situs tak terjangkau', s.unreachable],
+						['Kode lama terpasang', s.token_mismatch],
+						['Kode tidak ditemukan', s.token_not_found],
+						['Belum pernah dicek', s.never_checked]
+					])
+			);
+		}
+		sections.push(
+			'## Domain\n\n' +
+				mdTable(
+					['Media', 'Media ID', 'Domain', 'Mitra', 'Sebab terakhir', 'Gagal di', 'Gagal berturut-turut', 'Detail error', 'Dicek'],
+					rows.map((r) => [
+						r.name,
+						r.media_id,
+						r.website_url,
+						r.partner_name,
+						r.domain_last_result ? (RESULT_META[r.domain_last_result]?.label ?? r.domain_last_result) : 'Belum pernah dicek',
+						r.domain_last_stage ? (STAGE_META[r.domain_last_stage]?.label ?? r.domain_last_stage) : null,
+						r.domain_check_fail_count,
+						r.domain_last_error,
+						fmtDateTime(r.domain_last_error_at ?? r.domain_last_checked_at)
+					])
+				)
+		);
+		const traces = rows.filter((r) => r.domain_last_trace);
+		if (traces.length) {
+			sections.push(
+				'## Jejak langkah\n\n' +
+					traces
+						.map((r) => {
+							const t = Array.isArray(r.domain_last_trace) ? r.domain_last_trace.join('\n') : String(r.domain_last_trace);
+							return `### ${r.name} (${r.media_id})\n\n${mdCode(t)}`;
+						})
+						.join('\n\n')
+			);
+		}
+		return mdReport('Diagnostik Verifikasi Domain', ...sections);
+	}
 </script>
 
 {#snippet mediaCell(row: DiagnosticRow)}
@@ -260,6 +317,7 @@
 		title="Diagnostik Verifikasi Domain"
 		description={tr("Sebab kegagalan verifikasi domain mitra, tersimpan dari hasil pengecekan terakhir. Pakai ini untuk membedakan situs yang mati, situs yang diblokir, dan kode verifikasi yang salah tempel. Default hanya menampilkan domain yang belum terverifikasi.")}
 	>
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || rows.length === 0} />
 		<button class="app-btn app-btn-soft" onclick={load} disabled={loading}>
 			<RefreshCw size={15} /> Segarkan
 		</button>

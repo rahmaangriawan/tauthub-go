@@ -12,6 +12,8 @@
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList } from '$lib/copy-markdown';
 
 	type Audit = {
 		id: string;
@@ -103,11 +105,38 @@
 	}
 
 	const hasActiveFilter = $derived(Boolean(search || brand || action));
+
+	// Salin halaman yang sedang tampil (filter dan halaman ikut) sebagai Markdown.
+	function toMarkdown(): string {
+		const brandName = brands.find((b) => b.id === brand)?.name ?? brand;
+		return mdReport(
+			'Audit Log',
+			mdList([
+				['Total cocok', data.total],
+				['Ditampilkan', data.items.length ? `${offset + 1}-${offset + data.items.length}` : '0'],
+				['Pencarian', search],
+				['Brand', brandName],
+				['Jenis aksi', action]
+			]),
+			mdTable(
+				['Waktu', 'Action', 'Actor', 'Brand', 'Target', 'Target ID'],
+				data.items.map((e) => [
+					fmtDateTime(e.created_at),
+					e.action,
+					e.actor_email || 'System',
+					e.brand_name || e.brand_id || 'Platform',
+					e.target_type,
+					e.target_id
+				])
+			)
+		);
+	}
 </script>
 
 <section>
 	<PageHeader title="Audit Log" description={tr("Jejak tindakan platform dan brand yang tersimpan di server.")}>
 		<Badge tone="accent" label="{data.total.toLocaleString('id-ID')} events" />
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || data.items.length === 0} />
 	</PageHeader>
 
 	<Feedback {loading} {error} loadingText="Memuat audit log…" />

@@ -14,6 +14,8 @@
 	import Badge from '$lib/components/admin/badge.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	type Attempt = {
 		attempt_number: number;
@@ -322,6 +324,112 @@
 	}
 	const pub = $derived(data?.publication);
 	const isWordpress = $derived(pub?.media_integration_type === 'wordpress');
+
+	// Field sensitif di payload snapshot tidak ikut disalin.
+	const SENSITIVE_KEY = /pass(word|wd)?|secret|token|api[_-]?key|authorization|credential|private[_-]?key|sealed|cookie|signature/i;
+	function redactPayload(value: unknown, found: Set<string>): unknown {
+		if (Array.isArray(value)) return value.map((v) => redactPayload(v, found));
+		if (value && typeof value === 'object') {
+			const out: Record<string, unknown> = {};
+			for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+				if (SENSITIVE_KEY.test(k)) {
+					found.add(k);
+					out[k] = '[DIREDAKSI]';
+				} else out[k] = redactPayload(v, found);
+			}
+			return out;
+		}
+		return value;
+	}
+
+	// Salin laporan error lengkap sebagai Markdown (sesuai isi halaman).
+	function toMarkdown(): string {
+		const d = data;
+		const p = d?.publication;
+		if (!d || !p) return '';
+		const fmt = (v: string | null | undefined) => (v ? fmtDateTime(v) : null);
+		const sections: string[] = [
+			mdList([
+				['Publication ID', publicationId],
+				['Judul', p.document_title],
+				['Kampanye', p.campaign_name],
+				['Status', `${PUB_STATUS_LABEL[p.status] ?? p.status} (${p.status})`],
+				['Mode terbit', p.publish_status],
+				['Media', p.media_name],
+				['Tipe integrasi', p.media_integration_type],
+				['Adapter URL', p.adapter_url],
+				['Brand / Klien', [p.brand_name, p.brand_public_id].filter(Boolean).join(' · ')],
+				['Mitra', [p.partner_name, p.partner_public_id].filter(Boolean).join(' · ')],
+				['Dibuat oleh', p.created_by_email],
+				['Terjadwal', fmt(p.scheduled_at)],
+				['Terbit', fmt(p.published_at)],
+				['URL terbit', p.published_url],
+				['Koneksi', p.connection_id],
+				['Dokumen', `${p.document_id} · v${p.current_version} · ${p.document_slug ?? '-'}`],
+				['Error code', p.error_code],
+				['Error message', p.error_message],
+				['Gagal pada', p.error_code ? fmt(p.updated_at) : null],
+				['Peringatan pengiriman', d.job?.warning_message],
+				['Ditolak mitra', p.rejection_reason],
+				['Alasan batal', p.cancel_reason],
+				['Catatan', p.notes]
+			]),
+			'## Rincian harga\n\n' +
+				mdList([
+					['Harga Mitra', idr(p.partner_price ?? p.client_price)],
+					['Markup Tauthub', p.markup_percent != null ? `${p.markup_percent}%` : null],
+					['Nilai Markup', idr(Math.max(0, p.client_price - (p.partner_price ?? p.client_price)))],
+					['Harga Klien', idr(p.client_price)]
+				]),
+			'## Riwayat attempts\n\n' +
+				mdTable(
+					['#', 'Status', 'Kode error', 'Pesan error', 'Waktu'],
+					d.attempts.map((a) => [
+						a.attempt_number,
+						ATTEMPT_LABEL[a.status] ?? a.status,
+						a.error_code,
+						a.error_message,
+						fmt(a.completed_at ?? a.started_at)
+					])
+				),
+			'## Riwayat callback adaptor\n\n' +
+				mdTable(
+					['Waktu', 'HTTP', 'Diterima', 'Pesan error', 'IP', 'User agent'],
+					d.callbacks.map((c) => [
+						fmtDateTime(c.created_at),
+						c.status_code,
+						c.accepted ? 'accepted' : 'ditolak',
+						c.error_message,
+						c.ip_address,
+						c.user_agent
+					])
+				)
+		];
+		if (d.job) {
+			const j = d.job;
+			sections.push(
+				'## Job delivery\n\n' +
+					mdList([
+						['Job ID', j.id],
+						['Status job', j.status],
+						['Attempts', j.attempts],
+						['Remote ID', j.remote_post_id],
+						['Error', j.error_message ? `${j.error_code ? `[${j.error_code}] ` : ''}${j.error_message}` : null],
+						['Peringatan', j.warning_message]
+					])
+			);
+			if (j.payload_snapshot) {
+				const found = new Set<string>();
+				const safe = redactPayload(j.payload_snapshot, found);
+				sections.push(
+					'## Payload snapshot\n\n' +
+						(found.size ? `_Field sensitif diredaksi: ${[...found].join(', ')}_\n\n` : '') +
+						mdCode(JSON.stringify(safe, null, 2), 'json')
+				);
+			}
+		}
+		return mdReport(`Laporan error publikasi ${publicationId}`, ...sections);
+	}
 </script>
 
 <section>
@@ -331,6 +439,7 @@
 		description={`Publication ${publicationId}${pub?.campaign_name ? ` · Campaign: ${pub.campaign_name}` : ''}`}
 	>
 		{#if pub}<Badge tone={STATUS_TONE[pub.status] ?? 'neutral'} value={PUB_STATUS_LABEL[pub.status] ?? pub.status} />{/if}
+		<CopyMarkdownButton build={toMarkdown} label="Salin laporan error" disabled={loading || !pub} />
 		<a
 			href="/admin/publications/daftar"
 			class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs"

@@ -14,6 +14,8 @@
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	type BugStatus = 'open' | 'triage' | 'resolved' | 'closed';
 	type BugReport = {
@@ -169,6 +171,42 @@
 		return message.length > 120 ? message.slice(0, 120) + '…' : message;
 	}
 
+	// Salin halaman yang sedang tampil (filter status, pencarian, halaman ikut);
+	// pesan, konteks, dan catatan admin ditulis utuh di bawah tabel.
+	function toMarkdown(): string {
+		const from = (page - 1) * PAGE_SIZE;
+		const detailBlocks = rows.map((r) => {
+			const parts = [`### ${r.id}`, '**Pesan**', mdCode(r.message)];
+			if (r.context_info) parts.push('**Konteks**', mdCode(r.context_info));
+			if (r.admin_notes) parts.push('**Catatan admin**', mdCode(r.admin_notes));
+			return parts.join('\n\n');
+		});
+		return mdReport(
+			'Bug Reports',
+			mdList([
+				['Total cocok', total],
+				['Ditampilkan', rows.length ? `${from + 1}-${from + rows.length}` : '0'],
+				['Status', status === 'all' ? '' : STATUS_LABELS[status as BugStatus] ?? status],
+				['Pencarian', query.trim()]
+			]),
+			mdTable(
+				['ID', 'Status', 'Pengguna', 'Email', 'User ID', 'Brand', 'Brand ID', 'Dibuat', 'Diperbarui'],
+				rows.map((r) => [
+					r.id,
+					STATUS_LABELS[r.status] ?? r.status,
+					r.user_name,
+					r.user_email,
+					r.user_id,
+					r.brand_name,
+					r.brand_id,
+					fmtDateTime(r.created_at),
+					r.updated_at ? fmtDateTime(r.updated_at) : ''
+				])
+			),
+			detailBlocks.length ? '## Detail laporan\n\n' + detailBlocks.join('\n\n') : ''
+		);
+	}
+
 	const statusIcon = (value: BugStatus) =>
 		value === 'open' ? Clock : value === 'triage' ? TriangleAlert : value === 'resolved' ? CheckCircle2 : XCircle;
 </script>
@@ -176,6 +214,7 @@
 <section>
 	<PageHeader title="Bug Reports" description={tr("Laporan dari user tentang bug atau hasil AI yang tidak akurat.")}>
 		<Badge tone="accent" label="{total} laporan" />
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || rows.length === 0} />
 	</PageHeader>
 
 	<Feedback {loading} {error} loadingText="Memuat laporan…" />

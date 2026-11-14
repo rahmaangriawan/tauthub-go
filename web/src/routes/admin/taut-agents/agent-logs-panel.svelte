@@ -8,6 +8,8 @@
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime } from '$lib/admin-format';
 	import Select from '$lib/components/select.svelte';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	const AGENT_LABEL: Record<string, string> = {
 		profiler: 'Profiler',
@@ -64,6 +66,63 @@
 	const training = $derived<any[]>(data?.training ?? []);
 	const runsSlice = $derived(runs.slice((runsPage - 1) * 10, runsPage * 10));
 	const trainingSlice = $derived(training.slice((trainingPage - 1) * 10, trainingPage * 10));
+
+	const statusText = (s: string) => (s === 'done' ? 'Berhasil' : s === 'failed' ? 'Gagal' : 'Berjalan');
+	const isLong = (v: unknown) => typeof v === 'string' && (v.includes('\n') || v.length > 200);
+
+	// Salin tab yang sedang tampil (filter dan halaman ikut) sebagai Markdown.
+	function toMarkdown(): string {
+		const filters = mdList([
+			['Filter agent', agentFilter === 'all' ? 'Semua' : (AGENT_LABEL[agentFilter] ?? agentFilter)],
+			['Filter status', statusFilter === 'all' ? 'Semua' : statusText(statusFilter)],
+			['7 hari terakhir - Berhasil', okCount],
+			['7 hari terakhir - Gagal', failCount]
+		]);
+		const sections: string[] = [];
+		if (tab === 'runs') {
+			sections.push(
+				'## Log Eksekusi Agent',
+				mdList([['Halaman', `${runsPage} dari ${Math.max(1, Math.ceil(runs.length / 10))} (total ${runs.length} run)`]]),
+				mdTable(
+					['Waktu', 'Agent', 'Status', 'Kampanye / Media', 'Model', 'Token (in/out)', 'Error', 'Run ID'],
+					runsSlice.map((r) => [
+						fmtDateTime(r.created_at),
+						AGENT_LABEL[r.agent] ?? r.agent,
+						statusText(r.status),
+						`${r.campaign_name ?? '-'}${r.media_name ? ` / ${r.media_name}` : ''}`,
+						r.model,
+						`${r.token_input ?? '-'} / ${r.token_output ?? '-'}`,
+						isLong(r.error) ? '(lihat blok di bawah)' : r.error,
+						r.id
+					])
+				)
+			);
+			for (const r of runsSlice) {
+				if (isLong(r.error)) sections.push(`### Error ${r.id}`, mdCode(r.error));
+			}
+		} else {
+			sections.push(
+				'## Gudang Training AI',
+				mdList([['Halaman', `${trainingPage} dari ${Math.max(1, Math.ceil(training.length / 10))} (total ${training.length} sample)`]]),
+				mdTable(
+					['Waktu', 'Agent', 'Status', 'Input (preview)', 'Output (preview)', 'ID'],
+					trainingSlice.map((t) => [
+						fmtDateTime(t.created_at),
+						AGENT_LABEL[t.agent] ?? t.agent,
+						statusText(t.status),
+						isLong(t.input_preview) ? '(lihat blok di bawah)' : t.input_preview,
+						isLong(t.output_preview) ? '(lihat blok di bawah)' : t.output_preview,
+						t.id
+					])
+				)
+			);
+			for (const t of trainingSlice) {
+				if (isLong(t.input_preview)) sections.push(`### Input ${t.id}`, mdCode(t.input_preview));
+				if (isLong(t.output_preview)) sections.push(`### Output ${t.id}`, mdCode(t.output_preview));
+			}
+		}
+		return mdReport('Log Agent', filters, ...sections);
+	}
 </script>
 
 <div class="flex flex-col gap-4">
@@ -107,6 +166,7 @@
 			]}
 		/>
 		<button class="app-btn app-btn-soft" disabled={loading} onclick={load}><RefreshCw size={14} /> Refresh</button>
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || (tab === 'runs' ? runs.length === 0 : training.length === 0)} />
 	</div>
 
 	{#if error}<p class="text-sm" style="color: var(--destructive);">{error}</p>{/if}

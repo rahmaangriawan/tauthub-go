@@ -11,6 +11,8 @@
 	import Feedback from '$lib/components/admin/feedback.svelte';
 	import Badge from '$lib/components/admin/badge.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList } from '$lib/copy-markdown';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	type BatchJob = {
@@ -129,6 +131,50 @@
 
 	const batch = $derived(data?.batch);
 	const meta = $derived(batch ? (BATCH_STATUS_META[batch.status] ?? { label: batch.status, tone: 'neutral' as const }) : null);
+
+	// Salin laporan batch sebagai Markdown: ringkasan, tabel varian, lalu pesan
+	// error utuh per varian dan per job generasi.
+	function toMarkdown(): string {
+		if (!data) return '';
+		const b = data.batch;
+		const errors = data.variants
+			.filter((v) => v.error_message || v.jobs.some((j) => j.last_error))
+			.map((v) => {
+				const lines: string[] = [];
+				if (v.error_message) lines.push(`- Error varian: ${v.error_message}`);
+				for (const j of v.jobs) {
+					if (j.last_error) lines.push(`- Job ${j.id} (${j.status}, attempt ${j.attempts}/${j.max_attempts}): ${j.last_error}`);
+				}
+				return `### ${v.media_name ?? v.media_id} · ${v.angle_label} (${v.id})\n${lines.join('\n')}`;
+			})
+			.join('\n\n');
+		return mdReport(
+			`Batch variant ${b.batch_id}`,
+			mdList([
+				['Brand', b.brand_name ?? b.brand_id],
+				['Pembuat', b.user_email],
+				['Mode', b.mode],
+				['Seed', b.seed],
+				['Status', b.status],
+				['Varian', `${b.variant_counts.done}/${b.variant_counts.total} jadi, ${b.variant_counts.failed} gagal`],
+				['Dibuat', fmtDateTime(b.created_at)],
+				['Selesai', b.completed_at ? fmtDateTime(b.completed_at) : null]
+			]),
+			mdTable(
+				['Media', 'Sudut', 'Status', 'Publikasi', 'Status publikasi', 'URL terbit', 'Error'],
+				data.variants.map((v) => [
+					v.media_name ?? v.media_id,
+					v.angle_label,
+					v.status,
+					v.publication_id,
+					v.publication_status,
+					v.published_url,
+					v.error_message
+				])
+			),
+			errors ? `## Rincian error\n\n${errors}` : ''
+		);
+	}
 </script>
 
 <section>
@@ -140,6 +186,7 @@
 			: `Batch ${batchId}`}
 	>
 		{#if meta}<Badge tone={meta.tone} label={meta.label} />{/if}
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || !data} />
 		<a href="/admin/variants" class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" style="text-decoration: none;">
 			<ArrowLeft size={13} />{tr("Kembali ke daftar")}</a>
 	</PageHeader>

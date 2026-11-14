@@ -12,6 +12,8 @@
 	import Modal from '$lib/components/admin/modal.svelte';
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import { fmtDateTime } from '$lib/admin-format';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList } from '$lib/copy-markdown';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 
 	const LIMIT = 50;
@@ -255,6 +257,46 @@
 			color: (data.metrics?.jobs_failed ?? 0) > 0 ? 'var(--destructive)' : 'var(--muted-foreground)'
 		}
 	]);
+
+	// Salin halaman event yang sedang tampil sebagai Markdown, lengkap dengan
+	// halaman yang ditarik dan pesan error utuh untuk keperluan debug.
+	function toMarkdown(): string {
+		const rows = data.items.map((e) => {
+			const pages = parsePages(e.pages_tried);
+			return [
+				e.media_name ?? e.media_id,
+				e.website_url,
+				statusLabel(e.status, pages, e.error_message),
+				e.source,
+				e.attempt,
+				fmtDateTime(e.created_at),
+				pages.length ? `${pages.filter((p) => p.ok).length}/${pages.length}` : '-',
+				e.error_message
+			];
+		});
+		const details = data.items
+			.map((e) => {
+				const pages = parsePages(e.pages_tried);
+				if (pages.length === 0 && !e.error_message) return '';
+				const lines = pages.map((p) => `- ${p.ok ? 'OK' : 'GAGAL'} ${p.url} (${p.chars} karakter)${p.note ? ` ${p.note}` : ''}`);
+				if (e.error_message) lines.push(`- Error: ${e.error_message}`);
+				return `### ${e.media_name ?? e.media_id} (${e.media_id})\n${lines.join('\n')}`;
+			})
+			.filter(Boolean)
+			.join('\n\n');
+		return mdReport(
+			'Monitoring Kesimpulan Website',
+			mdList([
+				...metrics.map((m): [string, unknown] => [m.label, m.value]),
+				['Total cocok', data.total],
+				['Ditampilkan', data.items.length ? `${offset + 1}-${offset + data.items.length}` : '0'],
+				['Pencarian', search],
+				['Status', status]
+			]),
+			mdTable(['Media', 'Website', 'Status', 'Sumber', 'Attempt', 'Waktu', 'Halaman OK', 'Error'], rows),
+			details ? `## Rincian\n\n${details}` : ''
+		);
+	}
 </script>
 
 {#snippet statusCell(item: SummaryEvent)}
@@ -334,7 +376,9 @@
 	<PageHeader
 		title="Monitoring Kesimpulan Website"
 		description={tr("Tracking AI Tauthub saat menarik data web untuk profil Kesimpulan. Sukses dan gagal semuanya tercatat di sini.")}
-	/>
+	>
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || data.items.length === 0} />
+	</PageHeader>
 
 	<Feedback {loading} {error} {notice} />
 

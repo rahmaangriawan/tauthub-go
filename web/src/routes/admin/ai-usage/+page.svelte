@@ -12,6 +12,8 @@
 	import Pagination from '$lib/components/admin/pagination.svelte';
 	import Select from '$lib/components/select.svelte';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList } from '$lib/copy-markdown';
 
 	type AgentUsage = {
 		agent: string;
@@ -120,13 +122,73 @@
 		iso ? new Date(iso).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-';
 
 	const totalTokens = $derived(data?.summary.total_tokens ?? 0);
+
+	// Salin ringkasan, breakdown, dan log halaman yang sedang tampil sebagai Markdown.
+	function toMarkdown(): string {
+		const d = data;
+		if (!d) return '';
+		const statusLabel = (s: string) => (s === 'done' ? 'Berhasil' : s === 'failed' ? 'Gagal' : 'Berjalan');
+		const stepLabel = (a: string) => AGENT_META[a]?.label ?? a;
+		return mdReport(
+			'AI Token Usage',
+			mdList([
+				['Rentang (hari)', days],
+				['Filter step', agent === 'all' ? '' : stepLabel(agent)],
+				['Filter status', status === 'all' ? '' : statusLabel(status)],
+				['Pencarian kampanye', search.trim()],
+				['Total panggilan', fmtInt(d.summary.calls)],
+				['Berhasil', fmtInt(d.summary.done_calls)],
+				['Gagal', fmtInt(d.summary.failed_calls)],
+				['Token masuk', fmtInt(d.summary.token_input)],
+				['Token keluar', fmtInt(d.summary.token_output)],
+				['Total token', fmtInt(d.summary.total_tokens)],
+				['Rata-rata durasi', fmtDur(d.summary.avg_duration_ms)],
+				[
+					'Log ditampilkan',
+					d.runs.length ? `${(page - 1) * PAGE_SIZE + 1}-${(page - 1) * PAGE_SIZE + d.runs.length} dari ${d.total}` : `0 dari ${d.total}`
+				]
+			]),
+			'## Breakdown per Step AI',
+			mdTable(
+				['Step', 'Panggilan', 'Token Masuk', 'Token Keluar', 'Total Token', 'Porsi Token', 'Rata-rata Durasi', 'Gagal'],
+				d.by_agent.map((a) => [
+					stepLabel(a.agent),
+					fmtInt(a.calls),
+					fmtInt(a.token_input),
+					fmtInt(a.token_output),
+					fmtInt(a.total_tokens),
+					`${totalTokens > 0 ? Math.round((a.total_tokens / totalTokens) * 100) : 0}%`,
+					fmtDur(a.avg_duration_ms),
+					fmtInt(a.failed_calls)
+				])
+			),
+			'## Log Panggilan AI',
+			mdTable(
+				['Waktu', 'Step', 'Status', 'Kampanye / Media', 'Model', 'Token Masuk', 'Token Keluar', 'Total', 'Durasi', 'Error'],
+				d.runs.map((r) => [
+					fmtTime(r.created_at),
+					stepLabel(r.agent),
+					statusLabel(r.status),
+					`${r.campaign_name ?? '-'}${r.media_name ? ` / ${r.media_name}` : ''}`,
+					r.model ?? '-',
+					r.token_input == null ? '-' : fmtInt(r.token_input),
+					r.token_output == null ? '-' : fmtInt(r.token_output),
+					r.token_input == null && r.token_output == null ? '-' : fmtInt((r.token_input ?? 0) + (r.token_output ?? 0)),
+					fmtDur(r.duration_ms),
+					r.error ?? '-'
+				])
+			)
+		);
+	}
 </script>
 
 <section>
 	<PageHeader
 		title="AI Token Usage"
 		description={tr("Pemakaian token AI seluruh step Taut Pintar — Profiler, Matchmaker, Writer, Gatekeeper — dari log eksekusi taut_agent_runs.")}
-	/>
+	>
+		<CopyMarkdownButton build={toMarkdown} disabled={loading || !data} />
+	</PageHeader>
 
 	<Feedback {loading} {error} loadingText="Memuat data usage…" />
 

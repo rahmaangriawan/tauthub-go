@@ -11,6 +11,8 @@
 	import { CircleAlert, CircleCheck, Clock, RefreshCw } from '@lucide/svelte';
 	import { fmtDateTime } from '$lib/admin-format';
 	import { errMessage, isAccessError, mountWithSession, platformRequest } from './_shared';
+	import CopyMarkdownButton from '$lib/components/admin/copy-markdown-button.svelte';
+	import { mdReport, mdTable, mdList, mdCode } from '$lib/copy-markdown';
 
 	type LogItem = {
 		id: string;
@@ -141,6 +143,62 @@
 
 	const statusLabel = (s: string) =>
 		s === 'failed' ? tr('Gagal') : s === 'completed' ? tr('Selesai') : s === 'running' ? tr('Berjalan') : s === 'pending' ? tr('Menunggu') : s;
+
+	// Salin log yang sedang tampil (filter dan halaman ikut) sebagai Markdown.
+	function toMarkdown(): string {
+		const sections: string[] = [
+			mdList([
+				['Filter status', statusFilter ? statusLabel(statusFilter) : 'Semua'],
+				['Filter jenis', kindFilter ? kindLabel(kindFilter) : 'Semua'],
+				['Baris', total === 0 ? '0' : `${from}-${to} dari ${total}`],
+				['Halaman', `${page} / ${pageCount}`],
+				['Ringkasan 24 jam', `${summary.failed} gagal, ${summary.pending + summary.running} dalam antrean, ${summary.completed} selesai`]
+			])
+		];
+		if (traffic && (traffic.pending_jobs > 0 || traffic.failed_last_hour > 0 || traffic.last_error)) {
+			sections.push(
+				'## Antrean cek trafik (SimilarWeb)',
+				mdList([
+					['Menunggu', traffic.pending_jobs],
+					['Berjalan', traffic.running_jobs],
+					['Gagal dalam sejam', traffic.failed_last_hour],
+					['Sebab gagal terakhir', traffic.last_error]
+				])
+			);
+		}
+		if (seo && (seo.pending_jobs > 0 || seo.stale > 0 || seo.failed_last_hour > 0 || seo.da_error)) {
+			sections.push(
+				'## Antrean cek DA & AI Trust',
+				mdList([
+					['Media belum punya skor lengkap', seo.stale],
+					['Menunggu', seo.queued_jobs],
+					['Sedang diperiksa', seo.running_jobs],
+					['Pemeriksaan gagal (sejam terakhir)', seo.failed_last_hour],
+					['Penyedia DA menolak permintaan', seo.da_error]
+				])
+			);
+		}
+		sections.push(
+			'## Log job',
+			mdTable(
+				['Waktu', 'Jenis', 'Media', 'URL', 'Status', 'Percobaan', 'ID job'],
+				items.map((it) => [
+					fmtDateTime(it.updated_at),
+					kindLabel(it.kind),
+					it.media_name,
+					it.website_url,
+					statusLabel(it.status),
+					`${it.attempts}/${it.max_attempts}`,
+					it.id
+				])
+			)
+		);
+		for (const it of items) {
+			if (!it.last_error) continue;
+			sections.push(`### Pesan ${it.id} (${kindLabel(it.kind)}${it.media_name ? `, ${it.media_name}` : ''})`, mdCode(it.last_error));
+		}
+		return mdReport('Log Media', ...sections);
+	}
 </script>
 
 {#if error && !isAccessError(error)}
@@ -167,6 +225,7 @@
 		<span class="text-muted-foreground">({tr('24 jam terakhir')})</span>
 	</div>
 	<div class="flex-1"></div>
+	<CopyMarkdownButton build={toMarkdown} disabled={loading || items.length === 0} />
 	<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={loading} onclick={() => void load()}>
 		<RefreshCw size={14} class={loading ? 'animate-spin' : ''} /> {loading ? tr('Memuat…') : tr('Muat ulang')}
 	</button>
