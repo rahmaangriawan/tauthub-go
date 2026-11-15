@@ -19,17 +19,21 @@ func (d *Deps) ActiveBriefGet(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brand, err := d.access(r, chiParam(r, "brandId"), user.ID, "viewer")
-	if err != nil {
+	// brand_id di profiler_profiles menyimpan id yang dipakai URL (public id),
+	// bukan UUID, jadi seluruh kueri memakai parameter URL apa adanya seperti
+	// handler profiler lainnya.
+	brandID := chiParam(r, "brandId")
+	if _, err := d.access(r, brandID, user.ID, "viewer"); err != nil {
 		writeErr(w, err)
 		return
 	}
 	var id string
+	var err error
 	err = d.Pool.QueryRow(r.Context(), `
 		SELECT a.profile_id
 		FROM taut_brief_active a
 		JOIN profiler_profiles p ON p.id = a.profile_id AND p.deleted_at IS NULL
-		WHERE a.brand_id = $1 AND a.user_id = $2`, brand.ID, user.ID).Scan(&id)
+		WHERE a.brand_id = $1 AND a.user_id = $2`, brandID, user.ID).Scan(&id)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"profile_id": nil})
 		return
@@ -45,8 +49,8 @@ func (d *Deps) ActiveBriefPut(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
 		return
 	}
-	brand, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
-	if err != nil {
+	brandID := chiParam(r, "brandId")
+	if _, err := d.access(r, brandID, user.ID, "writer"); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -54,14 +58,14 @@ func (d *Deps) ActiveBriefPut(w http.ResponseWriter, r *http.Request) {
 	profileID, _ := strField(body, "profile_id")
 	if profileID == "" {
 		if _, err := d.Pool.Exec(r.Context(),
-			"DELETE FROM taut_brief_active WHERE brand_id = $1 AND user_id = $2", brand.ID, user.ID); err != nil {
+			"DELETE FROM taut_brief_active WHERE brand_id = $1 AND user_id = $2", brandID, user.ID); err != nil {
 			writeErr(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"profile_id": nil})
 		return
 	}
-	if !d.profileInBrand(r.Context(), profileID, brand.ID) {
+	if !d.profileInBrand(r.Context(), profileID, brandID) {
 		httpx.Error(w, http.StatusNotFound, "Brief tidak ditemukan.")
 		return
 	}
@@ -69,7 +73,7 @@ func (d *Deps) ActiveBriefPut(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO taut_brief_active (brand_id, user_id, profile_id, updated_at)
 		VALUES ($1, $2, $3, NOW())
 		ON CONFLICT (brand_id, user_id) DO UPDATE SET profile_id = EXCLUDED.profile_id, updated_at = NOW()`,
-		brand.ID, user.ID, profileID); err != nil {
+		brandID, user.ID, profileID); err != nil {
 		writeErr(w, err)
 		return
 	}
