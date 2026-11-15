@@ -1144,6 +1144,23 @@
 			}
 			const data = await res.json().catch(() => null);
 			copilotBriefs = (data?.profiles ?? []).map((p: any) => ({ id: String(p.id), name: String(p.name ?? tr('Brief')) }));
+			// Belum ada pilihan (bukan dari draf artikel): pakai brief aktif dari
+			// tombol "Pakai untuk Artikel" di Taut Brief, bila masih ada.
+			if (!copilotBriefId) {
+				try {
+					const ar = await apiRequest(`${profilerBase}/active-brief`);
+					if (ar.ok) {
+						const a = await ar.json().catch(() => null);
+						const hit = copilotBriefs.find((b) => b.id === a?.profile_id);
+						if (hit) {
+							copilotBriefId = hit.id;
+							copilotBriefName = hit.name;
+						}
+					}
+				} catch {
+					/* brief aktif hanya kemudahan; abaikan bila gagal */
+				}
+			}
 			return copilotBriefs.length > 0;
 		} catch (reason) {
 			copilotError = reason instanceof Error ? reason.message : tr('Gagal memuat data Brief Copilot.');

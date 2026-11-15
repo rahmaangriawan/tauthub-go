@@ -120,7 +120,7 @@ Peran adalah hak akses akun Anda pada sebuah brand. Pemilik brand yang mengaturn
 - Mengerjakan kampanye di Penyedia Konten, Kampanye Kilat, dan jalur lama, serta menambah putaran dan mengarsipkan: peran Writer atau lebih tinggi.
 - Membuat tautan berita acara: peran Admin atau lebih tinggi.
 
-Bila peran Anda belum cukup, layar menampilkan pesan **Brand not found**. Rinciannya ada di [Manajemen Kampanye](01-membuat-dan-mengelola-kampanye.md).
+Bila peran Anda belum cukup, layar menampilkan pesan **Peran Anda belum bisa mengubah bagian ini**. Rinciannya ada di [Manajemen Kampanye](01-membuat-dan-mengelola-kampanye.md).
 
 ## Isi bagian ini
 

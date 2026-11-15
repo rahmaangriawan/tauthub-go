@@ -65,7 +65,7 @@ Saat dicetak, latar dashboard disembunyikan. Seluruh daftar publikasi ikut terce
 
 ## Aturan dan batasan
 
-- Hanya peran **Admin** atau **Owner** pada brand yang bisa membuat tautan. Tautan dibuat sendiri saat jendela dibuka. Jadi peran lain melihat pesan kesalahan **Brand not found** dan tidak mendapat tautan.
+- Hanya peran **Admin** atau **Owner** pada brand yang bisa membuat tautan. Tautan dibuat sendiri saat jendela dibuka. Jadi peran lain melihat pesan kesalahan **Peran Anda belum bisa mengubah bagian ini** dan tidak mendapat tautan.
 - Satu kampanye punya satu tautan aktif. Bila Anda membuka jendela lagi, yang tampil tautan yang sama, bukan tautan baru.
 - Tautan tidak punya batas waktu. Dashboard Klien tidak punya tombol untuk mencabut atau mengganti tautan.
 - Memindahkan kampanye ke arsip tidak mematikan tautan. Bila kampanye dihapus permanen, tautannya tidak berlaku lagi.
@@ -79,7 +79,7 @@ Saat dicetak, latar dashboard disembunyikan. Seluruh daftar publikasi ikut terce
 
 | Pesan | Penyebab | Yang bisa Anda lakukan |
 |---|---|---|
-| **Brand not found** (di jendela Berita Acara Kampanye) | Peran Anda pada brand di bawah Admin. | Minta pemilik atau admin brand membuat tautan, lalu membagikannya kepada Anda. |
+| **Peran Anda belum bisa mengubah bagian ini** (di jendela Berita Acara Kampanye) | Peran Anda pada brand di bawah Admin. | Minta pemilik atau admin brand membuat tautan, lalu membagikannya kepada Anda. |
 | **Gagal membuat tautan share.** | Koneksi terputus, atau Tauthub tidak memberi keterangan kesalahan. | Klik **Buat tautan share publik** untuk mencoba lagi. |
 | **Terjadi kesalahan internal. Coba lagi.** | Gangguan sementara di pihak Tauthub. | Tunggu sebentar, lalu klik **Buat tautan share publik**. |
 | **Tautan tidak tersedia** (di halaman publik) | Tautan salah ketik, kampanyenya sudah dihapus permanen, atau halaman dibuka terlalu sering dalam waktu singkat. | Minta tautan terbaru kepada pemilik kampanye, atau tunggu sebentar lalu muat ulang halaman. |

@@ -106,7 +106,7 @@ Kalau **Ringkasan File** tidak punya bahan sama sekali, statusnya tetap **Belum 
 | **Ringkasan belum selesai. Tunggu sebentar, lalu periksa lagi.** | Pembuatan dari kotak **Ringkas sekarang?** belum selesai. | Buka tab **Ringkasan** dan tunggu status **Siap**. |
 | **Gagal menyalin.** | Browser menolak menyalin. | Pilih teksnya sendiri, lalu salin. |
 | **Gagal memuat riwayat perubahan.** | Riwayat belum bisa dimuat. | Klik **Coba lagi** di panel. |
-| **Brand not found** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
+| **Peran Anda belum bisa mengubah bagian ini** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
 
 ## Pertanyaan yang sering diajukan
 

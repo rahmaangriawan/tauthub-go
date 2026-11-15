@@ -151,7 +151,7 @@ Urutan peran dari yang terendah: Viewer, Reviewer, Writer, Strategist, Admin, da
 | **Status kampanye berubah. Muat ulang halaman lalu coba lagi.** | Tahap kampanye berubah saat Anda menekan **Tambah Putaran**. | Muat ulang halaman. |
 | **Gagal menghapus kampanye.** atau **Gagal memproses kampanye.** | Koneksi terputus, atau Tauthub tidak memberi keterangan kesalahan. | Periksa koneksi, lalu coba lagi. |
 | **Terjadi kesalahan internal. Coba lagi.** | Gangguan sementara di pihak Tauthub. | Tunggu sebentar, lalu ulangi. |
-| **Brand not found** | Peran akun Anda pada brand belum cukup untuk tindakan itu (lihat tabel hak akses). | Minta pemilik brand mengubah peran Anda, atau minta pemilik melakukan tindakannya. |
+| **Peran Anda belum bisa mengubah bagian ini** | Peran akun Anda pada brand belum cukup untuk tindakan itu (lihat tabel hak akses). | Minta pemilik brand mengubah peran Anda, atau minta pemilik melakukan tindakannya. |
 | **Kampanye tidak ditemukan.** disertai tombol **Kembali ke daftar** | Kampanye yang Anda buka sudah dihapus permanen, atau bukan milik brand ini. | Klik **Kembali ke daftar**. |
 
 Bila tindakan gagal, pesan merah tampil di atas daftar kampanye.

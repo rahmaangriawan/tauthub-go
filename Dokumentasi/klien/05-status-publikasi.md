@@ -52,7 +52,7 @@ Pada artikel berstatus **Terbit**, bisa muncul tiga label hasil pemeriksaan otom
 
 ### Jendela Detail publikasi
 
-Klik **Detail** untuk melihat judul, nama media, tanggal dibuat, **Status**, **Biaya**, tanggal **Terbit** (bila belum terbit, tampil garis), dan **Order** bila kodenya ada. Alasan pembatalan dan tautan **Buka artikel terbit** juga tampil bila ada. Tombol di bagian bawah menyesuaikan status: **Batalkan Publikasi**, **Kembalikan ke Persetujuan**, dan **Retry Publikasi** (nama lain untuk **Coba lagi**).
+Klik **Detail** untuk melihat judul, nama media, tanggal dibuat, **Status**, **Biaya**, tanggal **Terbit** (bila belum terbit, tampil garis), dan **Order** bila kodenya ada. Alasan pembatalan dan tautan **Buka artikel terbit** juga tampil bila ada. Bagian **Perjalanan artikel** menampilkan urutan kejadian beserta tanggal dan jamnya: pesanan dibuat, dijadwalkan, menunggu atau disetujui media, percobaan terbit, terbit, dan hasil cek link terakhir. Kalau percobaan terbit gagal, keterangannya berupa kalimat biasa seperti "Gambar artikel ini belum bisa diterbitkan. Tim kami sedang menindaklanjuti." Penyebab teknisnya tidak ditampilkan kepada Anda. Bila artikel sudah lebih dari 2 hari menunggu media, muncul catatan **Menunggu lama.** Tombol di bagian bawah menyesuaikan status: **Batalkan Publikasi**, **Kembalikan ke Persetujuan**, dan **Retry Publikasi** (nama lain untuk **Coba lagi**).
 
 ## Status dan artinya
 
@@ -147,12 +147,13 @@ Mitra punya waktu 3×24 jam (tiga hari tiga malam) untuk menyetujui atau menolak
 - Setelah batas lewat, Tauthub membatalkan pesanan pada pemeriksaan berikutnya. Alasannya tertulis "Dibatalkan otomatis: media tidak merespons melebihi SLA 3×24 jam." Di layar lebar, baris menampilkan **Media tidak merespons (SLA)**.
 - Saldo pesanan kembali ke **Saldo** dengan sendirinya. Baris menulis "Saldo pesanan sudah dikembalikan ke Saldo Akun."
 - Anggota brand menerima notifikasi "Pesanan dibatalkan, saldo dikembalikan".
+- Sebelum batas lewat, Anda menerima notifikasi **Artikel masih menunggu media** satu kali per artikel, yaitu saat artikel sudah 2 hari menunggu (sehari sebelum batas, dihitung dari titik mulai yang sama). Isinya hanya memberi tahu bahwa artikel masih menunggu persetujuan dan Tauthub terus memantau.
 
 ## Aturan dan batasan
 
 - Saldo yang ditahan kembali bila Anda membatalkan, mitra menolak, pengiriman gagal, atau pesanan batal otomatis. Saat artikel terbit, saldo yang ditahan menjadi terpakai.
 - Bila tim Tauthub yang membatalkan, baris juga diawali "Dibatalkan klien:", lalu alasan dari tim.
-- Peran di bawah **Writer** bisa melihat daftar. Namun, aksi yang mengubah data gagal dengan pesan "Brand not found".
+- Peran di bawah **Writer** bisa melihat daftar. Namun, aksi yang mengubah data gagal dengan pesan "Peran Anda belum bisa mengubah bagian ini".
 
 ## Pesan galat yang umum
 
@@ -161,7 +162,7 @@ Mitra punya waktu 3×24 jam (tiga hari tiga malam) untuk menyetujui atau menolak
 | "Gagal memuat publikasi." | Koneksi atau server bermasalah. Muat ulang halaman. |
 | "Gagal memuat detail publikasi." | Koneksi atau server bermasalah. Muat ulang, lalu buka **Detail** lagi. |
 | "Publication not found" | Publikasi itu bukan milik brand yang sedang Anda buka, misalnya dari tautan notifikasi brand lain. Pindah ke brand yang benar, lalu buka **Status Publikasi**. |
-| "Brand not found" | Peran Anda di brand belum cukup untuk aksi itu. Minta admin brand menaikkan peran Anda. |
+| "Peran Anda belum bisa mengubah bagian ini" | Peran Anda di brand belum cukup untuk aksi itu. Minta admin brand menaikkan peran Anda. |
 | "Publication status cannot transition from …" | Status sudah berubah sebelum aksi Anda diproses. Muat ulang halaman dan lihat status terbaru. |
 | "Status … tidak bisa di-reset ke persetujuan." | Status saat ini tidak boleh dikembalikan ke persetujuan. |
 | "Publikasi ini tidak melalui persetujuan mitra." | Media ini tidak memakai persetujuan mitra, jadi tombol **Kembalikan ke Persetujuan** tidak berlaku. |

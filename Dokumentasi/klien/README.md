@@ -22,13 +22,15 @@ Menu di sisi kiri Dashboard Klien dikelompokkan seperti tabel di bawah. Kolom **
 | RUANG KERJA | **Kampanye** | Membuat dan mengatur kampanye, menyiapkan artikel, dan mengirimkannya | [Kampanye](03-kampanye/README.md) |
 | RUANG KERJA | **Status Publikasi** | Memantau tiap artikel yang sudah Anda kirim ke media | [Status Publikasi](05-status-publikasi.md) |
 | RUANG KERJA | **Link Guardian** | Memantau apakah artikel sudah terbit dan tautannya masih utuh | [Link Guardian](06-link-guardian.md) |
-| ANALITIK & PELAPORAN | **Analisis Kinerja**, **Audit Publikasi** | Belum tersedia (segera hadir) | [Analisis dan audit](07-analisis-dan-audit.md) |
+| ANALITIK & PELAPORAN | **Kalender editorial** | Sebaran tanggal terbit dan jadwal artikel dalam sebulan | [Kalender editorial](18-kalender-editorial.md) |
+| ANALITIK & PELAPORAN | **Analisis Kinerja**, **Audit Publikasi** | Ringkasan hasil kampanye dan kepatuhan artikel yang sudah terbit | [Analisis dan audit](07-analisis-dan-audit.md) |
 | KEUANGAN | **Saldo** | Saldo, Top Up, dan riwayat pemakaian | [Saldo dan Top Up](08-saldo-dan-top-up.md) |
 | KEUANGAN | **Invoice & Pajak** | Daftar invoice (tagihan resmi) brand Anda | [Invoice dan Pajak](09-invoice-dan-pajak.md) |
 | PENGATURAN | **Profil & Akun** | Data akun, pengaturan notifikasi, dan keamanan | [Profil dan Akun](10-profil-dan-akun.md) |
 | PENGATURAN | **Pesan** | Mengobrol dengan Mitra tentang tiap artikel | [Pesan](11-pesan.md) |
 | PENGATURAN | **Tim dan undangan** | Mengundang anggota lewat email, peran finance | [Tim dan undangan](15-tim-dan-undangan.md) |
 | KREDIT | **Bonus top up** | Paket berbonus dan kode promo | [Bonus top up](16-bonus-top-up.md) |
+| KREDIT | **Level loyalitas** | Tier diskon otomatis dari total belanja | [Level loyalitas](17-level-loyalitas.md) |
 | PENGATURAN | **Apa yang Baru** | Catatan fitur baru dan perbaikan | [Apa yang Baru](13-apa-yang-baru.md) |
 
 Beberapa fitur tidak punya menu sendiri:
@@ -57,6 +59,9 @@ Beberapa fitur tidak punya menu sendiri:
 | Memastikan tautan di artikel saya tetap ada | [Link Guardian](06-link-guardian.md) |
 | Membagikan laporan kampanye kepada atasan atau pelanggan | [Berita Acara Kampanye](03-kampanye/07-berita-acara.md) |
 | Mengatur notifikasi dan keamanan akun | [Profil dan Akun](10-profil-dan-akun.md) |
+| Melihat level dan diskon loyalitas saya | [Level loyalitas](17-level-loyalitas.md) |
+| Memeriksa artikel mana yang sehat atau bermasalah | [Analisis dan audit](07-analisis-dan-audit.md) |
+| Melihat jadwal dan tanggal terbit dalam sebulan | [Kalender editorial](18-kalender-editorial.md) |
 
 ## Lihat juga
 

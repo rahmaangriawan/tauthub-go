@@ -112,7 +112,7 @@ Saat post terhapus, gambarnya ikut terhapus.
 | **Gagal mengunggah gambar timeline.** | Unggahan gambar gagal. | Klik **Kirim** lagi untuk mengulang. |
 | **Kuota harian terlampaui** | Batas unggahan harian akun sudah tercapai. | Kirim tanpa gambar, atau coba lagi besok. |
 | **Gagal menghapus post.** | Penghapusan gagal. | Coba lagi. |
-| **Brand not found** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
+| **Peran Anda belum bisa mengubah bagian ini** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
 
 ## Aturan dan batasan
 

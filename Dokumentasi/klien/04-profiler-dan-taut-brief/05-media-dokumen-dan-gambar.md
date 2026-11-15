@@ -109,7 +109,7 @@ Kuota adalah jatah yang boleh Anda pakai.
 | **Total unggahan aktifmu melebihi** batas | Total berkas aktif di akun Anda sudah penuh. | Tunggu pembersihan otomatis atau hapus berkas lama. |
 | **Gagal memuat media.** | Daftar berkas belum bisa dimuat. | Muat ulang halaman. |
 | **Gagal menghapus dokumen.** atau **Gagal menghapus gambar.** | Penghapusan gagal. | Coba lagi. |
-| **Brand not found** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
+| **Peran Anda belum bisa mengubah bagian ini** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
 
 ## Aturan dan batasan
 

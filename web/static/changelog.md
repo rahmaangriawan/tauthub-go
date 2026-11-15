@@ -19,6 +19,19 @@ Catatan:
   yang sudah ada ikut diperbarui saat impor, tapi tidak memicu notifikasi ulang.
 -->
 
+## v0.6.5 — 2026-11-15
+
+### Fitur
+- **Perjalanan artikel**: di detail publikasi sekarang ada urutan kejadian tiap artikel beserta tanggal dan jamnya, mulai dari pesanan dibuat, menunggu media, sampai terbit dan cek link. Artikel yang sudah lebih dari 2 hari menunggu media diberi catatan khusus, dan kamu menerima kabar sekali sebelum batas 3 hari lewat.
+- **Pakai untuk Artikel**: tombol di Taut Brief menjadikan brief yang sedang kamu buka sebagai brief aktif. Di Pengelola Naskah, brief itu langsung terpilih untuk gaya Yang Proper, jadi tidak perlu memilih ulang di tiap artikel.
+- **Cari brief dan pindah brief**: daftar brief bisa dicari, dan halaman Instan Brief punya pilihan brief di bagian atas.
+
+### Perbaikan
+- Tab Entitas sekarang menampilkan nama alternatif, kanal resmi, serta keyword dan URL target yang sudah kamu isi.
+- Persentase kelengkapan brief kini disertai daftar isian yang masih kosong, dan formulir Instan Brief menandai kolom yang ikut dihitung untuk 100%.
+- Kabar artikel gagal terbit ditulis dengan kalimat biasa, tanpa istilah teknis.
+- Pesan saat peranmu belum cukup untuk suatu aksi kini jelas dan berbahasa Indonesia.
+
 ## v0.6.4 — 2026-11-12
 
 ### Fitur

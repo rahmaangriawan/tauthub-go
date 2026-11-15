@@ -21,11 +21,11 @@ Browser Anda mengingat tab yang terakhir Anda buka, untuk tiap brief. Setelah ha
 | **Brand Brief & Entity Builder** dan lencana **Beta** | Judul halaman. Lencana **Beta** menandai fitur yang masih dikembangkan. |
 | Tombol panah **Perluas header** atau **Ciutkan header** | Menampilkan atau menyembunyikan teks penjelasan di bawah judul. Awalnya header dalam keadaan ciut. |
 | **Simpan Draf** | Isian dari obrolan dan formulir tersimpan sendiri, jadi Anda tidak perlu menekannya. Kalau tidak ada perubahan yang perlu disimpan, muncul pesan **Belum ada perubahan.** |
-| **Gunakan untuk Kampanye** | Membuka halaman **Kampanye**. Brief tidak dikirim ke kampanye mana pun. |
+| **Pakai untuk Artikel** | Menjadikan brief ini brief aktif Anda, lalu membuka halaman **Kampanye**. Di Pengelola Naskah, brief aktif terpilih otomatis pada gaya **Yang Proper**. Brief tidak dikirim ke kampanye mana pun. |
 | Chip **Beta** | Klik untuk membaca keterangannya: fitur ini masih dikembangkan, isi dan tampilannya bisa berubah, dan mungkin masih ada bagian yang belum sempurna. Untuk menutup, klik di luar kotak keterangan. |
 | **Sinkronisasi Terakhir** | Waktu terakhir data brief dimuat atau Tubi membalas. Tampilannya: **Menunggu data**, **Baru saja**, atau selisih menit dan jam. |
 
-Saat header ciut, **Simpan Draf** dan **Gunakan untuk Kampanye** tampil sebagai ikon. Nama tombol muncul sebagai keterangan saat kursor ada di atas ikon. Kedua tombol tidak tampil di tab **Media** dan **Ringkasan**.
+Saat header ciut, **Simpan Draf** dan **Pakai untuk Artikel** tampil sebagai ikon. Nama tombol muncul sebagai keterangan saat kursor ada di atas ikon. Kedua tombol tidak tampil di tab **Media** dan **Ringkasan**.
 
 ### Lima tab
 
@@ -48,7 +48,7 @@ Setiap baris berisi:
 - ikon pin untuk menyematkan;
 - ikon titik tiga (**Aksi brief**) untuk menu **Ubah nama**, **Duplikat**, **Simpan sebagai template**, dan **Hapus**.
 
-Brief yang disematkan tampil paling atas. Brief lain urut dari yang terakhir diubah. Daftar tidak punya kotak pencarian. Teks **Belum ada brief.** tampil kalau daftar kosong.
+Brief yang disematkan tampil paling atas. Brief lain urut dari yang terakhir diubah. Kalau brief lebih dari 5, kotak **Cari brief…** muncul di atas daftar dan menyaring berdasarkan nama. Teks **Belum ada brief.** tampil kalau daftar kosong.
 
 Di komputer, ikon pin dan titik tiga muncul saat kursor ada di atas baris. Ikon pin yang sedang aktif selalu terlihat. Klik tombol **Kecilkan** di kartu untuk mengecilkannya jadi ikon. Klik ikon itu (**Buka kartu brief**) untuk membukanya lagi.
 
@@ -116,13 +116,13 @@ Persentase di daftar brief dan di lencana tab **Entitas** menunjukkan berapa ban
 ## Aturan dan batasan
 
 - Semua anggota brand melihat brief, obrolan, dan sematan yang sama.
-- Peran Viewer dan Reviewer hanya bisa melihat. Kalau mereka mencoba mengubah, layar menampilkan pesan gagal singkat seperti **Brand not found**.
+- Peran Viewer dan Reviewer hanya bisa melihat. Kalau mereka mencoba mengubah, layar menampilkan pesan gagal singkat seperti **Peran Anda belum bisa mengubah bagian ini**.
 - Persentase brief yang sedang dibuka ikut naik saat Tubi mengisi data. Persentase brief lain diambil dari daftar yang dimuat.
 
 ## Pertanyaan yang sering diajukan
 
 **Mengapa saya tidak melihat daftar brief?**
-Daftar hanya tampil di tab **Copilot Chat** pada pintu **Chat Brief**. Masuk lewat tombol **Profiler** di halaman Kampanye, lalu pilih **Chat Brief**.
+Daftar lengkap tampil di tab **Copilot Chat** pada pintu **Chat Brief**. Masuk lewat tombol **Profiler** di halaman Kampanye, lalu pilih **Chat Brief**. Di halaman **Instan Brief** ada pilihan **Brief** di bagian atas untuk pindah ke brief lain tanpa keluar dari formulir.
 
 **Apakah menghapus brief menghapus artikel atau kampanye saya?**
 Tidak. Dialog penghapusan menyebut bahwa kampanye yang sudah memakai brief tidak terpengaruh.

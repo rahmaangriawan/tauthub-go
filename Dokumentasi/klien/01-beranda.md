@@ -129,7 +129,7 @@ Semua halaman Dashboard Klien punya kerangka yang sama: menu samping, bar atas, 
 | RUANG KERJA | **Kampanye** | Membuat dan mengatur kampanye. Lihat [Kampanye](03-kampanye/README.md) |
 | RUANG KERJA | **Status Publikasi** | Memantau tiap artikel. Lihat [Status Publikasi](05-status-publikasi.md) |
 | RUANG KERJA | **Link Guardian** | Memantau tautan artikel yang sudah terbit. Lihat [Link Guardian](06-link-guardian.md) |
-| ANALITIK & PELAPORAN | **Analisis Kinerja**, **Audit Publikasi** | Belum tersedia. Lihat [Analisis dan audit](07-analisis-dan-audit.md) |
+| ANALITIK & PELAPORAN | **Analisis Kinerja** | Ringkasan hasil kampanye. Lihat [Analisis dan audit](07-analisis-dan-audit.md) |
 | KEUANGAN | **Saldo** | [Saldo dan Top Up](08-saldo-dan-top-up.md) |
 | KEUANGAN | **Invoice & Pajak** | [Invoice dan Pajak](09-invoice-dan-pajak.md) |
 | PENGATURAN | **Profil & Akun** | [Profil dan Akun](10-profil-dan-akun.md) |

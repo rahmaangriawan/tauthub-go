@@ -42,7 +42,9 @@
 		} | null;
 	};
 	type Detail = Pub & {
-		partner_draft_edits?: unknown; timeline?: unknown;
+		partner_draft_edits?: unknown;
+		timeline?: Array<{ key: string; label: string; at: string; tone: 'ok' | 'warn' | 'bad' | 'info'; detail?: string }>;
+		waiting_long?: boolean;
 		verification?: { status: string; compliance_score: number | null; error_message?: string | null } | null;
 	};
 
@@ -252,6 +254,8 @@
 
 	const fmtDate = (v: string | null) =>
 		v ? new Date(v).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—';
+	const fmtDateTime = (v: string | null) =>
+		v ? new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 	const SENTIMENT_LABEL: Record<string, string> = { positive: 'Positif', neutral: 'Netral', negative: 'Negatif' };
 
 	function categoriesOf(p: Pub): string[] {
@@ -780,6 +784,31 @@
 				{/if}
 			</dl>
 
+			{#if detail.waiting_long}
+				<p class="border-t px-6 py-3 text-xs" style="color: var(--warning);">
+					<span class="font-medium">{tr('Menunggu lama.')}</span>
+					{tr('Artikel ini sudah lebih dari 2 hari menunggu persetujuan media. Kami terus memantau dan akan memberi kabar begitu ada perkembangan.')}
+				</p>
+			{/if}
+
+			{#if detail.timeline && detail.timeline.length > 0}
+				<section class="border-t px-6 py-4" aria-label={tr('Perjalanan artikel')}>
+					<h3 class="text-xs font-semibold text-muted-foreground">{tr('Perjalanan artikel')}</h3>
+					<ol class="tl-list mt-3">
+						{#each detail.timeline as ev (ev.key + ev.at)}
+							<li class="tl-item">
+								<span class="tl-dot tl-{ev.tone}" aria-hidden="true"></span>
+								<div class="min-w-0">
+									<p class="text-sm font-medium leading-snug">{tr(ev.label)}</p>
+									{#if ev.detail}<p class="mt-0.5 text-xs text-muted-foreground">{tr(ev.detail)}</p>{/if}
+									<p class="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{fmtDateTime(ev.at)}</p>
+								</div>
+							</li>
+						{/each}
+					</ol>
+				</section>
+			{/if}
+
 			{#if detail.verification}
 				<p class="border-t px-6 py-3 text-xs text-muted-foreground">
 					Verifikasi URL: <span class="font-medium" style="color: var(--foreground);">{detail.verification.status}</span>{detail.verification.compliance_score != null ? ` · skor ${detail.verification.compliance_score}/100` : ''}
@@ -940,4 +969,16 @@
 	.pub-btn { min-height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; }
 	.pub-btn-main { background-color: var(--accent); color: var(--accent-foreground); }
 	.pub-btn-main:hover:not(:disabled) { background-color: color-mix(in srgb, var(--accent-foreground) 14%, var(--accent)); }
+
+	.tl-list { position: relative; margin: 0; padding: 0; list-style: none; }
+	.tl-item { position: relative; display: flex; gap: 12px; padding: 0 0 14px 0; }
+	.tl-item:not(:last-child)::before {
+		content: ''; position: absolute; left: 4px; top: 14px; bottom: 0;
+		width: 1px; background: var(--border);
+	}
+	.tl-dot { flex: none; width: 9px; height: 9px; margin-top: 5px; border-radius: 9999px; background: var(--muted-foreground); }
+	.tl-ok { background: var(--success); }
+	.tl-warn { background: var(--warning); }
+	.tl-bad { background: var(--destructive); }
+	.tl-info { background: var(--muted-foreground); }
 </style>

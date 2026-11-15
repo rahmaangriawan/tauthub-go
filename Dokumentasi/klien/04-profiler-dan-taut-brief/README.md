@@ -47,11 +47,11 @@ Kedua cara menyimpan isian ke brief yang sama. Untuk berganti cara, buka pintu m
 
 ## Hubungan dengan kampanye dan penulisan artikel AI
 
-Brief tidak otomatis menempel pada kampanye. Saat ini pilihan Profiler tidak tampil di jendela pembuatan kampanye di Katalog Media.
+Brief tidak otomatis menempel pada kampanye, dan pilihan Profiler tidak tampil di jendela pembuatan kampanye di Katalog Media. Brief dipakai lewat Pengelola Naskah, untuk tiap artikel.
 
 AI Writer memakai brief saat Anda memilih gaya **Yang Proper** di Pengelola Naskah, lalu memilih brief sebagai **Memori Brand (Tauthub Copilot)**. Gaya **Sederhana Aja** ditandai **Tanpa Perlu data perusahaan / Copilot**, jadi tidak perlu brief. Langkah lengkapnya ada di [Brief untuk AI Writer, biaya, dan batas pemakaian](09-brief-untuk-ai-writer-dan-biaya.md).
 
-Tombol **Gunakan untuk Kampanye** di Taut Brief hanya membuka daftar Kampanye. Tombol itu tidak mengirim brief ke kampanye tertentu.
+Tombol **Pakai untuk Artikel** di Taut Brief menjadikan brief yang sedang dibuka sebagai **brief aktif** Anda untuk brand ini, lalu membuka daftar Kampanye. Di Pengelola Naskah, brief aktif terpilih otomatis pada gaya **Yang Proper**, jadi Anda tidak perlu memilih ulang di tiap artikel. Brief aktif tersimpan per akun, bukan per tim, dan tetap bisa diganti di Pengelola Naskah.
 
 ## Biaya
 

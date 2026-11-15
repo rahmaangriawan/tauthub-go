@@ -92,6 +92,7 @@ var policies = map[string]ChannelPolicy{
 	// notify.EnqueueUserWA untuk audiens mitra dan klien. Email tetap off
 	// karena belum ada pengirim email untuk keluarga event ini.
 	"publication.waiting_partner":    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
+	"publication.waiting_long":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.draft_sent":         {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
 	"publication.revision_requested": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.url_requested":      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},

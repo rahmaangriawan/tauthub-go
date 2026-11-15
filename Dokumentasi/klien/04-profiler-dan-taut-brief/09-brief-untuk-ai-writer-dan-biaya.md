@@ -8,7 +8,7 @@
 
 ## Gambaran singkat
 
-Brief artinya catatan tertulis tentang brand Anda. AI Writer adalah AI yang menulis artikel untuk Anda. Brief tidak menempel otomatis pada kampanye, dan saat ini pilihan Profiler tidak tampil di jendela pembuatan kampanye di Katalog Media. AI Writer memakai brief lewat pilihan di Pengelola Naskah, untuk tiap artikel.
+Brief artinya catatan tertulis tentang brand Anda. AI Writer adalah AI yang menulis artikel untuk Anda. Brief tidak menempel otomatis pada kampanye, dan pilihan Profiler tidak tampil di jendela pembuatan kampanye di Katalog Media. AI Writer memakai brief lewat pilihan di Pengelola Naskah, untuk tiap artikel. Kalau Anda menekan **Pakai untuk Artikel** di Taut Brief, brief itu menjadi brief aktif dan terpilih otomatis di Pengelola Naskah.
 
 Di Pengelola Naskah ada dua gaya artikel:
 

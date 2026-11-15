@@ -79,7 +79,7 @@ Isian Anda tidak dikosongkan saat penyimpanan gagal.
 
 - Semua isian disimpan sekaligus. Kalau satu isian ditolak, tidak ada yang tersimpan.
 - Isian yang tersimpan dianggap sudah Anda konfirmasi sendiri, dan persentase kelengkapan ikut berubah.
-- Sebagian besar isian tampil di tab **Entitas**. Tiga kolom tidak tampil di sana: **Nama alternatif atau alias**, **Kanal resmi**, dan **Keyword prioritas dan URL target**. Isinya tetap tersimpan dan ikut menjadi bahan **Ringkasan Entitas**.
+- Isian tampil di tab **Entitas**. Tiga kolom (**Nama alternatif atau alias**, **Kanal resmi**, dan **Keyword prioritas dan URL target**) tampil di kartu **Sebutan, Kanal & Target Konten**. Isinya juga menjadi bahan **Ringkasan Entitas**.
 - Kolom yang Anda kosongkan dilewati dan tidak menghapus isian lama. Untuk mengubah isian, ketik nilai baru di kolom yang sama. Layar tidak punya cara untuk menghapus isian.
 - Menyimpan formulir tidak membuat ringkasan. Ringkasan dibuat saat Anda menekan tombolnya di tab **Ringkasan**.
 
@@ -106,7 +106,7 @@ Kartu **Penanganan data Anda** menjelaskan hal berikut:
 | **Isian … terlalu panjang.** | Isian melewati batas panjang pada tabel di atas. | Persingkat isian, lalu simpan lagi. |
 | **Skema brief belum punya field yang cocok. Isi dulu lewat obrolan.** | Daftar isian brief sedang tidak cocok dengan formulir. | Pakai **Chat Brief**, atau hubungi tim Tauthub. |
 | **Gagal menyimpan Profil Brand.** | Penyimpanan gagal. | Coba lagi. Isian Anda tetap di layar. |
-| **Brand not found** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
+| **Peran Anda belum bisa mengubah bagian ini** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
 
 ## Aturan dan batasan
 
@@ -121,7 +121,7 @@ Kartu **Penanganan data Anda** menjelaskan hal berikut:
 Tidak. Menyimpan formulir tidak mengirim apa pun ke AI.
 
 **Mengapa persentase di tab Entitas belum 100% setelah saya mengisi formulir?**
-Persentase menghitung isian wajib di brief. Formulir hanya mewajibkan dua kolom. Tetapi tim Tauthub yang menentukan daftar isian wajib brief, dan daftar itu bisa mencakup kolom lain. Kolom yang Anda kosongkan membuat persentase belum penuh.
+Persentase menghitung isian wajib menurut skema brief. Formulir hanya mewajibkan dua kolom supaya bisa disimpan, tetapi tim Tauthub menentukan daftar isian yang dihitung untuk 100%, dan daftar itu bisa mencakup kolom lain. Kolom seperti itu diberi keterangan **Dihitung untuk kelengkapan 100%.** di formulir. Di atas formulir dan di tab **Entitas** ada daftar **Belum terisi** yang menyebut isian mana yang masih kosong.
 
 **Bagaimana mengubah isian yang sudah tersimpan?**
 Buka lagi **Instan Brief**, ubah teks di kolom yang sama, lalu klik **Simpan ke Brief**. Anda juga bisa meminta Tubi mengubahnya di **Copilot Chat**.

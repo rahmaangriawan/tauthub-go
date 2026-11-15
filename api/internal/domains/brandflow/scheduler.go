@@ -105,6 +105,9 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 	// 2. Safety sweep publikasi terjadwal yang belum punya job hidup.
 	res.PublicationsTriggered = d.schEnqueueDuePublications(ctx, maxJobs)
 
+	// 2b. Kabar ke klien: artikel yang sudah lama menunggu persetujuan media.
+	d.schSweepClientWaiting(ctx, schMinInt(maxJobs, 20))
+
 	// 3. Pengingat mitra mendekati batas approve (window 2 jam).
 	res.PartnerRemindersSent = d.schSweepPartnerDeadlines(ctx, schMinInt(maxJobs, 20), false)
 
@@ -505,6 +508,51 @@ func (d *Deps) schEnqueueDuePublications(ctx context.Context, limit int) int {
 		enqueued++
 	}
 	return enqueued
+}
+
+// schSweepClientWaiting: klien diberi kabar sekali per artikel bila artikelnya
+// sudah 2 hari menunggu persetujuan media, dihitung dari titik mulai SLA yang
+// sama (jadwal terbit bila ada, kalau tidak saat pesanan dibuat). Sengaja 2 hari, bukan 3: SLA 3×24 jam
+// (schSweepSLACancel) membatalkan otomatis pesanan tanpa jadwal pada hari ke-3,
+// jadi kabar harus datang sebelum itu. Isinya netral: tidak menyebut integrasi,
+// koneksi, atau domain media.
+func (d *Deps) schSweepClientWaiting(ctx context.Context, limit int) int {
+	if limit < 1 {
+		return 0
+	}
+	rows, err := d.queryRows(ctx, `
+		SELECT p.id, p.brand_id, m.name AS media_name, d.title AS document_title,
+		       b.public_id AS brand_public_id
+		FROM publications p
+		JOIN media m ON m.id = p.media_id
+		JOIN brands b ON b.id = p.brand_id
+		JOIN content_documents d ON d.id = p.document_id
+		WHERE p.status = 'waiting_partner'
+		  AND COALESCE(p.scheduled_at, p.created_at) <= NOW() - INTERVAL '2 days'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM notifications n
+		    WHERE n.publication_id = p.id AND n.type = 'publication.waiting_long'
+		  )
+		ORDER BY COALESCE(p.scheduled_at, p.created_at)
+		LIMIT $1`, limit)
+	if err != nil {
+		slog.Error("[scheduler] sweep kabar klien menunggu media gagal", "err", err)
+		return 0
+	}
+	sent := 0
+	for _, row := range rows {
+		id := row.strOr("id", "")
+		brandID := row.strOr("brand_id", "")
+		if id == "" || brandID == "" {
+			continue
+		}
+		link := "/klien/" + row.strOr("brand_public_id", brandID) + "/publications?pub=" + id
+		body := "Artikel \"" + row.strOr("document_title", "Artikel") + "\" masih menunggu persetujuan dari " +
+			row.strOr("media_name", "media") + ". Kami terus memantau dan akan memberi kabar begitu ada perkembangan."
+		d.notifyBrandMembersOnPub(ctx, brandID, "publication.waiting_long", "Artikel masih menunggu media", body, &link, id)
+		sent++
+	}
+	return sent
 }
 
 // ---------- 3 & 4. pengingat mitra & notifikasi telat ----------

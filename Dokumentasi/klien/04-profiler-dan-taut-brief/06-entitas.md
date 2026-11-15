@@ -1,6 +1,6 @@
 # Entitas
 
-> Tab Entitas menampilkan data brand yang sudah tersimpan di brief, dalam empat kartu, beserta persentase kelengkapan isian wajib. Tab ini hanya untuk dibaca. Untuk mengisi atau mengubah data, pakai Copilot Chat atau formulir Instan Brief.
+> Tab Entitas menampilkan data brand yang sudah tersimpan di brief, dalam lima kartu, beserta persentase kelengkapan isian wajib dan daftar isian yang belum terisi. Tab ini hanya untuk dibaca. Untuk mengisi atau mengubah data, pakai Copilot Chat atau formulir Instan Brief.
 
 **Lokasi:** menu **Kampanye** › **Profiler** › pilih pintu masuk › tab **Entitas**
 
@@ -18,7 +18,7 @@ Tab **Entitas** diperbarui otomatis saat Tubi mengisi data di **Copilot Chat**, 
 
 Kartu paling atas berisi bilah progres dan teks berbentuk "X / Y field wajib terisi · Z sumber dibaca". X adalah jumlah isian wajib yang sudah terisi. Y adalah total isian wajib. Z adalah jumlah sumber (dokumen dan tautan) yang tercatat untuk brief ini. Lencana persentase ada di sisi kanan. Kalau semua isian wajib sudah terisi tetapi masih ada isian opsional yang kosong, teks bertambah "· N field opsional masih kosong". Lalu muncul tautan **Lengkapi field opsional lewat Copilot →**.
 
-### Empat kartu isi
+### Lima kartu isi
 
 | Kartu | Isi |
 |---|---|
@@ -26,6 +26,7 @@ Kartu paling atas berisi bilah progres dan teks berbentuk "X / Y field wajib ter
 | **Batasan & Panduan Narasi Media (Guardrails Advertorial)** | Kotak hijau **PILAR NARASI UTAMA (DIANJURKAN)** berisi klaim yang boleh dipakai. Kotak merah **LARANGAN KERAS (NEGATIVE CONSTRAINTS)** berisi aturan klaim serta kata dan frasa terlarang. |
 | **Fakta Resmi & Sinyal Entitas (Entity Facts)** | Baris **Fakta resmi (tahun, jumlah, lokasi)**, **Keunggulan unik (USP)**, **Fakta penting yang wajib dipertahankan**, **Wilayah operasional**, dan **Website resmi (canonical domain)**. |
 | **Target Pertanyaan AI (GEO Target Query)** | Daftar pertanyaan yang ingin Anda menangkan di jawaban mesin AI. Tiap pertanyaan punya lencana **Sinyal Siap** atau **Belum terverifikasi**. |
+| **Sebutan, Kanal & Target Konten** | Tiga bagian: **Nama alternatif atau alias** (tampil sebagai label kecil), **Kanal resmi** (daftar tautan yang bisa diklik), dan **Keyword prioritas dan URL target** (satu baris per pasangan keyword dan tautannya). Teks miring **Belum diisi. Lengkapi lewat Instan Brief atau obrolan Copilot.** tampil kalau bagian itu masih kosong. |
 
 ### Asal tiap baris
 
@@ -69,6 +70,7 @@ Kartu atau baris yang belum terisi menampilkan teks miring seperti **Belum diisi
 |---|---|
 | Lencana hijau 100% | Semua isian wajib sudah terisi. |
 | Lencana kuning di bawah 100% | Masih ada isian wajib yang kosong. |
+| **Belum terisi:** diikuti nama isian | Muncul di bawah bilah progres selama persentase belum 100%. Isinya nama isian wajib yang masih kosong, supaya Anda tahu persis apa yang menahan angkanya. |
 | **N field opsional masih kosong** | Ada isian opsional yang belum terisi, misalnya keunggulan, fakta penting, gaya penulisan, atau pedoman konten. Isian ini tidak dihitung dalam persentase. |
 | **Sinyal Siap** | Pertanyaan target sudah tersimpan sebagai isian yang terisi atau terkonfirmasi. |
 | **Belum terverifikasi** | Pertanyaan tampil, tetapi isiannya belum berstatus terisi atau terkonfirmasi. |

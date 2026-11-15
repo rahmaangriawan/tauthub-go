@@ -554,6 +554,22 @@
 			.filter(Boolean);
 	}
 
+	/** Daftar yang dipisah baris atau titik koma (alias, kanal resmi). */
+	function listItems(key: string): string[] {
+		return String(ringkasan[key] ?? '')
+			.split(/[\r\n;]+/)
+			.map((s) => s.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim())
+			.filter(Boolean);
+	}
+
+	/** Pasangan "keyword, URL" satu per baris. URL boleh kosong. */
+	function keywordPairs(): { keyword: string; url: string }[] {
+		return listItems('target_keywords_urls').map((line) => {
+			const m = line.match(/^(.*?)\s*(?:,|\t|→|\|)\s*(https?:\/\/\S+)\s*$/i);
+			return m ? { keyword: m[1].trim() || line, url: m[2] } : { keyword: line, url: '' };
+		});
+	}
+
 	/** Jam lokal browser dari created_at API (UTC ISO). Kosong bila tak ada. */
 	function timeLabel(iso?: string): string {
 		if (!iso) return '';
@@ -2261,6 +2277,26 @@
 
 	// Simpan seluruh isian sekali jalan. Backend memvalidasi semua field dulu,
 	// lalu menulisnya dalam satu transaksi (tidak ada simpan separuh).
+	// Tombol "Pakai untuk Artikel": simpan brief ini sebagai brief aktif di server,
+	// supaya Pengelola Naskah memilihnya otomatis di tiap artikel. Kegagalan
+	// menyimpan tidak menghalangi pindah halaman.
+	async function useBriefForArticles() {
+		try {
+			const res = await apiRequest(`${apiBase}/active-brief`, {
+				method: 'PUT',
+				body: JSON.stringify({ profile_id: profileId })
+			});
+			if (res.ok) {
+				showToast(tr('Brief ini akan dipilih otomatis di Pengelola Naskah.'));
+			} else {
+				showToast(await readApiError(res, tr('Brief belum bisa dijadikan brief aktif.')), 'error');
+			}
+		} catch {
+			showToast(tr('Brief belum bisa dijadikan brief aktif.'), 'error');
+		}
+		void goto(`/klien/${brandUrl}/campaigns`);
+	}
+
 	async function saveInstanBrief() {
 		if (instanFormBusy) return;
 		if (!validateInstan()) {
@@ -2448,6 +2484,16 @@
 	// menghitung field WAJIB, jadi 100% bukan berarti semua yang tampak di tab
 	// Entitas sudah terisi — mis. Keunggulan/USP dan Fakta penting. Angka ini
 	// dipakai untuk memberi tahu jujur + jalan pintas melengkapinya.
+	// Isian yang menentukan persentase (wajib menurut skema brief) tetapi masih
+	// kosong. Formulir Instan Brief hanya mewajibkan dua kolom agar bisa disimpan,
+	// jadi daftar ini yang menjelaskan kenapa angkanya belum 100%.
+	const requiredEmpty = $derived(
+		fields.filter((f) => f.enabled && f.required && f.layer !== 3 && !isFilled(f.key))
+	);
+	function countsToward100(key: string): boolean {
+		return fields.some((f) => f.key === key && f.enabled && f.required && f.layer !== 3);
+	}
+
 	const optionalEmpty = $derived(
 		fields.filter((f) => f.enabled && !f.required && f.layer !== 3 && !isFilled(f.key))
 	);
@@ -2800,9 +2846,9 @@
 						<button
 							class="app-btn app-btn-primary !min-h-8 !min-w-8 !p-1"
 							type="button"
-							aria-label={tr('Gunakan untuk Kampanye')}
-							title={tr('Gunakan untuk Kampanye')}
-							onclick={() => void goto(`/klien/${brandUrl}/campaigns`)}
+							aria-label={tr('Pakai untuk Artikel')}
+							title={tr('Pakai untuk Artikel')}
+							onclick={() => void useBriefForArticles()}
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true">
 								<path d="M0 0h16v16H0z" fill="none" />
@@ -2811,8 +2857,8 @@
 						</button>
 					{:else}
 						<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => void saveRingkasan()}>{tr('Simpan Draf')}</button>
-						<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" onclick={() => void goto(`/klien/${brandUrl}/campaigns`)}>
-							{tr('Gunakan untuk Kampanye')}<ArrowRight size={14} />
+						<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" onclick={() => void useBriefForArticles()}>
+							{tr('Pakai untuk Artikel')}<ArrowRight size={14} />
 						</button>
 					{/if}
 					{/if}
@@ -2958,6 +3004,23 @@
 				onscroll={onInstanScroll}
 			>
 				<div class="instan-page">
+					{#if briefs.length > 1}
+						<label class="instan-switch">
+							<span>{tr('Brief')}</span>
+							<select
+								class="app-input"
+								value={profileId}
+								onchange={(e) => {
+									const target = briefs.find((x) => x.id === e.currentTarget.value);
+									if (target && target.id !== profileId) void goto(`/klien/${brandUrl}/profiler/${target.short_code || target.id}?gate=instan`);
+								}}
+							>
+								{#each briefs as b (b.id)}
+									<option value={b.id}>{b.name}</option>
+								{/each}
+							</select>
+						</label>
+					{/if}
 					<header class="instan-head">
 						<h2>{tr('Template Brief')}</h2>
 						<p class="instan-head-desc">{tr('Lengkapi informasi brand pada formulir di bawah ini, atau unduh template untuk diisi secara offline. Data yang tersimpan menjadi acuan penulisan artikel.')}</p>
@@ -3000,11 +3063,14 @@
 									class="instan-form"
 									onsubmit={(e) => { e.preventDefault(); void saveInstanBrief(); }}
 								>
+									{#if requiredEmpty.length > 0}
+										<p class="instan-hint">{tr('Kelengkapan 100% dihitung dari isian berikut. Yang masih kosong:')} {requiredEmpty.map((f) => f.label || f.key).join(', ')}.</p>
+									{/if}
 									{#each INSTAN_FIELD_MAP as m (m.key)}
 										<BriefFieldInput
 											keyName={m.key}
 											label={tr(m.label)}
-											hint={tr(m.hint)}
+											hint={tr(m.hint) + (countsToward100(m.key) && !m.required ? ' ' + tr('Dihitung untuk kelengkapan 100%.') : '')}
 											widget={m.widget ?? 'text'}
 											options={m.form === 'kategori' ? instanCategoryOptions : []}
 											required={Boolean(m.required)}
@@ -3258,7 +3324,16 @@
 									{#if briefs.length === 0}
 										<p class="brief-pop-empty">{tr('Belum ada brief.')}</p>
 									{/if}
-									{#each briefs as b (b.id)}
+									{#if briefs.length > 5}
+										<label class="brief-pop-search">
+											<Search size={12} />
+											<input placeholder={tr('Cari brief…')} aria-label={tr('Cari brief')} bind:value={briefSearch} />
+										</label>
+										{#if visibleBriefs().length === 0}
+											<p class="brief-pop-empty">{tr('Tidak ada brief yang cocok.')}</p>
+										{/if}
+									{/if}
+									{#each visibleBriefs() as b (b.id)}
 										{@const isActive = b.id === profileId}
 										<div class="brief-pop-item">
 											{#if popRenameId === b.id}
@@ -3785,6 +3860,12 @@
 										&nbsp;·&nbsp;{optionalEmpty.length} {tr('field opsional masih kosong')}
 									{/if}
 								</p>
+								{#if progressPct < 100 && requiredEmpty.length > 0}
+									<p class="mt-2 text-xs" style="color: var(--warning);">
+										{tr('Belum terisi')}: {requiredEmpty.map((f) => f.label || f.key).join(', ')}
+									</p>
+									<p class="mt-1 text-[11px] text-muted-foreground">{tr('Persentase dihitung dari isian wajib menurut skema brief. Isi lewat Instan Brief atau obrolan Copilot.')}</p>
+								{/if}
 								{#if progressPct >= 100 && optionalEmpty.length > 0}
 									<button
 										class="mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold underline-offset-2 hover:underline"
@@ -3938,6 +4019,71 @@
 											{tr('Belum ada pertanyaan target. Lengkapi lewat obrolan Copilot.')}
 										</p>
 									{/if}
+								</div>
+							</section>
+
+							<section class="app-card p-5">
+								<div class="flex items-center gap-3 border-b pb-4" style="border-color: var(--border);">
+									<span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background: var(--accent); color: var(--accent-foreground);">
+										<FileText size={18} />
+									</span>
+									<div>
+										<h3 class="text-sm font-bold">{tr('Sebutan, Kanal & Target Konten')}</h3>
+										<p class="text-[11px] text-muted-foreground">{tr('Nama alternatif, kanal resmi, dan keyword prioritas yang tersimpan di brief ini')}</p>
+									</div>
+								</div>
+								<div class="mt-4 space-y-4">
+									<div>
+										<p class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Nama alternatif atau alias')}</p>
+										{#if listItems('preferred_terms').length > 0}
+											<div class="flex flex-wrap gap-1.5">
+												{#each listItems('preferred_terms') as t (t)}
+													<span class="rounded-full border px-2.5 py-1 text-xs" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 60%, white);">{t}</span>
+												{/each}
+											</div>
+										{:else}
+											<p class="text-xs italic" style="color: var(--muted-foreground);">{tr('Belum diisi. Lengkapi lewat Instan Brief atau obrolan Copilot.')}</p>
+										{/if}
+									</div>
+									<div>
+										<p class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Kanal resmi')}</p>
+										{#if listItems('canonical_links').length > 0}
+											<ul class="space-y-1.5">
+												{#each listItems('canonical_links') as u (u)}
+													<li class="truncate text-xs">
+														{#if isHttpUrl(u)}
+															<a href={u} target="_blank" rel="noopener noreferrer" class="underline-offset-2 hover:underline" style="color: var(--primary);">{u}</a>
+														{:else}
+															{u}
+														{/if}
+													</li>
+												{/each}
+											</ul>
+										{:else}
+											<p class="text-xs italic" style="color: var(--muted-foreground);">{tr('Belum diisi. Lengkapi lewat Instan Brief atau obrolan Copilot.')}</p>
+										{/if}
+									</div>
+									<div>
+										<p class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Keyword prioritas dan URL target')}</p>
+										{#if keywordPairs().length > 0}
+											<div class="space-y-1.5">
+												{#each keywordPairs() as kp, ki (kp.keyword + ki)}
+													<div class="flex items-center justify-between gap-3 rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 60%, white);">
+														<span class="min-w-0 truncate text-xs font-medium">{kp.keyword}</span>
+														{#if kp.url}
+															{#if isHttpUrl(kp.url)}
+																<a href={kp.url} target="_blank" rel="noopener noreferrer" class="min-w-0 max-w-[55%] truncate text-xs underline-offset-2 hover:underline" style="color: var(--primary);">{kp.url}</a>
+															{:else}
+																<span class="min-w-0 max-w-[55%] truncate text-xs text-muted-foreground">{kp.url}</span>
+															{/if}
+														{/if}
+													</div>
+												{/each}
+											</div>
+										{:else}
+											<p class="text-xs italic" style="color: var(--muted-foreground);">{tr('Belum diisi. Lengkapi lewat Instan Brief atau obrolan Copilot.')}</p>
+										{/if}
+									</div>
 								</div>
 							</section>
 						</div>
@@ -6221,6 +6367,20 @@
 	/* Baris paling bawah: buka menu ke atas supaya tidak terpotong panel. */
 	.brief-pop-item:nth-last-child(-n + 3) .brief-pop-menu { top: auto; bottom: calc(100% - 2px); }
 	.brief-pop-empty { padding: 6px 4px; font-size: 12px; color: var(--muted-foreground); }
+	.brief-pop-search {
+		display: flex; align-items: center; gap: 6px; margin: 0 0 4px;
+		padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px;
+		background: var(--card); color: var(--muted-foreground);
+	}
+	.brief-pop-search input {
+		width: 100%; min-width: 0; background: transparent; outline: none;
+		font-size: 12px; color: var(--foreground);
+	}
+	.instan-switch {
+		display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+		font-size: 12.5px; color: var(--muted-foreground);
+	}
+	.instan-switch select { min-height: 36px; max-width: 320px; }
 	/* Baris brief: yang tidak aktif abu-abu, yang aktif hitam dengan latar abu tipis. */
 	.brief-pop-row {
 		display: flex; align-items: center; gap: 10px;

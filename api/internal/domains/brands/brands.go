@@ -50,7 +50,14 @@ type BrandError struct {
 
 func (e *BrandError) Error() string { return e.Message }
 
-func errNotFound() *BrandError      { return &BrandError{404, "Brand not found"} }
+func errNotFound() *BrandError      { return &BrandError{404, "Brand tidak ditemukan."} }
+
+// errRoleTooLow: pengguna anggota brand tetapi perannya belum cukup untuk aksi
+// ini. Beda dari errNotFound (bukan anggota, keberadaan brand disembunyikan):
+// anggota sudah tahu brand-nya ada, jadi pesannya boleh jujur soal peran.
+func errRoleTooLow() *BrandError {
+	return &BrandError{403, "Peran Anda belum bisa mengubah bagian ini. Minta pemilik atau admin brand menaikkan peran Anda."}
+}
 func errUnauthorized() *BrandError  { return &BrandError{401, "Invalid or expired access token"} }
 
 // ---------- brand access (port brand() + cache 30s) ----------
@@ -155,7 +162,7 @@ func BrandAccess(ctx context.Context, pool *pgxpool.Pool, brandID, userID string
 	if c, ok := brandCache[cacheKey]; ok && c.expiresAt.After(now) {
 		cacheMu.Unlock()
 		if roleRank[c.row.Role] < roleRank[minRole] {
-			return BrandRow{}, errNotFound()
+			return BrandRow{}, errRoleTooLow()
 		}
 		return c.row, nil
 	}
@@ -166,7 +173,7 @@ func BrandAccess(ctx context.Context, pool *pgxpool.Pool, brandID, userID string
 		return BrandRow{}, err
 	}
 	if roleRank[role] < roleRank[minRole] {
-		return BrandRow{}, errNotFound()
+		return BrandRow{}, errRoleTooLow()
 	}
 
 	cacheMu.Lock()

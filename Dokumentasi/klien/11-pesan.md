@@ -94,7 +94,7 @@ Bila mitra mengirim pesan, semua anggota brand selain pengirim menerima notifika
 
 - Satu publikasi punya satu percakapan. Bila Anda klik **Hubungi Media** berkali-kali, yang terbuka tetap percakapan yang sama.
 - Sesi berlaku 3×24 jam sejak pesan pertama dari pihak mana pun.
-- Untuk membaca percakapan, Anda cukup punya hak akses melihat. Untuk mengirim pesan, hak akses harus penulis atau lebih tinggi. Hak akses di bawahnya mendapat pesan "Brand not found" saat mengirim.
+- Untuk membaca percakapan, Anda cukup punya hak akses melihat. Untuk mengirim pesan, hak akses harus penulis atau lebih tinggi. Hak akses di bawahnya mendapat pesan "Peran Anda belum bisa mengubah bagian ini" saat mengirim.
 - Anda hanya melihat nama media, bukan identitas pemilik media.
 - Tim admin Tauthub boleh membaca pesan.
 

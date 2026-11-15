@@ -68,7 +68,7 @@ Klik **Kembali** untuk kembali ke daftar kampanye. Tautan backlink (tautan dari 
 
 ## Aturan dan batasan
 
-- Anda butuh peran Writer atau lebih tinggi untuk meracik dan memilih media. Peran yang lebih rendah melihat pesan **Brand not found**.
+- Anda butuh peran Writer atau lebih tinggi untuk meracik dan memilih media. Peran yang lebih rendah melihat pesan **Peran Anda belum bisa mengubah bagian ini**.
 - Satu kampanye bisa memilih paling banyak 20 media. Bila Anda mencentang lebih banyak, muncul pesan "Maksimal 20 media per kampanye."
 - Alamat lokal atau jaringan internal ditolak. Website harus bisa dibuka oleh siapa saja.
 - AI hanya merekomendasikan media aktif yang terhubung lewat integrasi penerbitan otomatis (sambungan yang memasang artikel di website media tanpa dikerjakan tangan). Media yang diterbitkan mitra secara manual tidak ikut dipertimbangkan.

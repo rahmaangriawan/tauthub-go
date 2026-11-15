@@ -938,7 +938,8 @@ func (d *Deps) publicationFailedNotification(ctx context.Context, publicationID 
 		SELECT p.id, p.brand_id, m.name AS media_name, d.title AS document_title,
 		       b.public_id AS brand_public_id,
 		       pa.user_id AS partner_user_id, pa.public_id AS partner_public_id,
-		       (SELECT error_message FROM publication_attempts WHERE publication_id = p.id ORDER BY attempt_number DESC LIMIT 1) AS error_message
+		       (SELECT error_message FROM publication_attempts WHERE publication_id = p.id ORDER BY attempt_number DESC LIMIT 1) AS error_message,
+		       (SELECT error_code FROM publication_attempts WHERE publication_id = p.id ORDER BY attempt_number DESC LIMIT 1) AS error_code
 		FROM publications p
 		JOIN media m ON m.id = p.media_id
 		JOIN brands b ON b.id = p.brand_id
@@ -957,12 +958,9 @@ func (d *Deps) publicationFailedNotification(ctx context.Context, publicationID 
 	}
 	brandPublicID := row.strOr("brand_public_id", row.strOr("brand_id", ""))
 	brandLink := "/klien/" + brandPublicID + "/publications?pub=" + publicationID
-	body := "\"" + article + "\" gagal dikirim ke " + mediaName + "."
-	if safe != "" {
-		body += " " + safe
-	} else {
-		body += " Silakan coba lagi atau hubungi dukungan."
-	}
+	// Klien membaca kalimat biasa; pesan teknis (`safe`) hanya untuk mitra.
+	clientText := clientFailureText(row.strOr("error_code", ""))
+	body := "\"" + article + "\" gagal dikirim ke " + mediaName + ". " + clientText
 	d.notifyBrandMembersOnPub(ctx, row.strOr("brand_id", ""), "publication.failed", "Publikasi gagal", body, &brandLink, publicationID)
 
 	if partnerUserID := row.strOr("partner_user_id", ""); partnerUserID != "" {
@@ -987,7 +985,7 @@ func (d *Deps) publicationFailedNotification(ctx context.Context, publicationID 
 		})
 	}
 
-	d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.failed", publicationID, article, mediaName, brandLink, safe)
+	d.publicationWAtoBrandMembers(ctx, row.strOr("brand_id", ""), "publication.failed", publicationID, article, mediaName, brandLink, clientText)
 }
 
 // ---------- standard check (port lib/standard/service.ts) ----------

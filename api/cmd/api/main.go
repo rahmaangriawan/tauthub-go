@@ -284,6 +284,8 @@ func run() error {
 
 			// Profiler (Structured Knowledge Workspace) tingkat klien.
 			authed.Get("/brands/{brandId}/profiler/profiles", profilerDeps.ProfilesList)
+			authed.Get("/brands/{brandId}/profiler/active-brief", profilerDeps.ActiveBriefGet)
+			authed.Put("/brands/{brandId}/profiler/active-brief", profilerDeps.ActiveBriefPut)
 			authed.Post("/brands/{brandId}/profiler/profiles", profilerDeps.ProfileCreate)
 			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}", profilerDeps.ProfileGet)
 			authed.Get("/brands/{brandId}/profiler/profiles/{profileId}/export", profilerDeps.ProfileExport)

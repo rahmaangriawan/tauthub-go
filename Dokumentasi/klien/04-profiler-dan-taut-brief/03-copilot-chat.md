@@ -125,7 +125,7 @@ Setelah ringkasan jadi, Anda mengirim pesan berikutnya, dan kotak yang sama munc
 | **Koneksi terputus saat AI menulis. Balasan ini belum tuntas, coba kirim ulang untuk melanjutkan.** | Koneksi putus di tengah balasan. | Periksa koneksi internet Anda, lalu kirim ulang. |
 | **Melebihi 10 MB, tidak dilampirkan** | Berkas melewati batas ukuran. | Kecilkan berkas atau pilih berkas lain. |
 | **Maksimal 5 berkas / 25 MB lampiran per brief, tidak dilampirkan** | Jatah lampiran obrolan untuk brief ini habis. | Unggah lewat tab **Media**, atau lanjutkan di brief baru. Lampiran yang Anda hapus baru mengosongkan jatah setelah pembersihan otomatis berjalan. |
-| **Brand not found** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
+| **Peran Anda belum bisa mengubah bagian ini** | Peran Anda belum boleh mengubah. | Minta peran Writer atau lebih tinggi. |
 
 Kalau kotak pesan menampilkan keterangan **Fitur AI ini belum aktif di platform**, Tubi belum bisa membalas. Anda tetap bisa mengisi brief lewat **Instan Brief**.
 

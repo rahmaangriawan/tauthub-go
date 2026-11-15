@@ -164,7 +164,7 @@ Tim Tauthub memeriksa kondisi domain dan menghubungi pemilik media. Bila masalah
 | "Gagal memuat daftar artikel." | Daftar gagal dimuat. Klik **Coba lagi** di bawah pesan. |
 | "Pengecekan manual dibatasi 1x sehari. Coba lagi nanti." | Jatah harian sudah terpakai. Tunggu 24 jam sejak pemeriksaan manual terakhir. |
 | "Gagal mengantrekan pengecekan." atau "Gagal mengajukan klaim." | Permintaan gagal diproses. Coba lagi beberapa saat kemudian. |
-| "Brand not found" | Peran Anda belum **Writer**, jadi **Crawl Sekarang** dan **Ajukan Klaim** ditolak. Minta admin brand menaikkan peran Anda. |
+| "Peran Anda belum bisa mengubah bagian ini" | Peran Anda belum **Writer**, jadi **Crawl Sekarang** dan **Ajukan Klaim** ditolak. Minta admin brand menaikkan peran Anda. |
 
 Selama satu klaim sedang dikirim, tombol **Ajukan Klaim** di baris lain mati sementara.
 

@@ -74,7 +74,7 @@ Menjalankan AI Matchmaker dan memilih media tidak memotong saldo. Nanti saldo te
 | **Gagal memuat rekomendasi.** | Data rekomendasi tidak terbaca. | Muat ulang halaman. |
 | **Gagal menambahkan media manual.** atau **Gagal menyimpan seleksi media.** | Media tidak bisa disimpan ke kampanye. | Coba lagi. Bila tetap gagal, kurangi jumlah media terpilih. |
 | **Gagal mengunci placement.** | Tahap kampanye tidak bisa dikunci. | Coba klik **Kunci & Lanjutkan Penulisan →** sekali lagi. |
-| **Brand not found** | Peran Anda di bawah Writer. | Minta pemilik brand mengubah peran Anda. |
+| **Peran Anda belum bisa mengubah bagian ini** | Peran Anda di bawah Writer. | Minta pemilik brand mengubah peran Anda. |
 | **Tidak ada media yang cocok dengan filter.** | Filter di tab **Manual** terlalu ketat. | Klik **Reset Filter** di **Filter Lanjutan** dan kosongkan kolom pencarian. |
 
 Pesan galat tampil di kotak merah di atas tab. Anda bisa menutupnya dengan tanda silang.

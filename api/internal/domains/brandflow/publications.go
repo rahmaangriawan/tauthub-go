@@ -422,6 +422,10 @@ func (d *Deps) PublicationGet(w http.ResponseWriter, r *http.Request) {
 	base["replaces"] = replacesJSON
 	base["replaced_by"] = replacedByJSON
 	base["pr_analysis"] = d.publicationPrAnalysis(r.Context(), publicationID)
+	base["timeline"] = d.publicationTimeline(r.Context(), publicationID, attempts)
+	if pubRow, perr := d.queryRow(r.Context(), "SELECT status, COALESCE(scheduled_at, created_at) AS since FROM publications WHERE id = $1 LIMIT 1", publicationID); perr == nil && pubRow != nil {
+		base["waiting_long"] = publicationWaitingLong(pubRow.strOr("status", ""), rowTime(pubRow, "since"))
+	}
 	writeJSON(w, http.StatusOK, base)
 }
 

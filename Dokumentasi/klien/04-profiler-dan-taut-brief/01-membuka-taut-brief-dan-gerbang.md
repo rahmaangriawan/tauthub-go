@@ -74,7 +74,7 @@ Di Pengelola Naskah ada bagian **Memori Brand (Tauthub Copilot)** pada gaya **Ya
 |---|---|---|
 | **Gagal memuat daftar brief.** | Daftar brief belum bisa dimuat. | Klik **Coba lagi**. Kalau tetap gagal, tutup jendela, muat ulang halaman, lalu klik **Profiler** lagi. |
 | **Gagal membuat brief pertama.** | Brief pertama tidak bisa dibuat otomatis. | Klik **Coba lagi**. Pastikan peran Anda Writer atau lebih tinggi. |
-| **Brand not found** | Peran Anda belum boleh mengubah, atau brand tidak ditemukan. | Minta pemilik atau admin brand menaikkan peran Anda ke Writer atau lebih tinggi. |
+| **Peran Anda belum bisa mengubah bagian ini** | Peran Anda belum boleh mengubah, atau brand tidak ditemukan. | Minta pemilik atau admin brand menaikkan peran Anda ke Writer atau lebih tinggi. |
 | **Gagal memakai template.** | Template tidak bisa dipakai. | Coba lagi, atau pilih pintu masuk tanpa template. |
 | **Template diterapkan, tetapi brief baru tidak dapat dibuka.** | Brief baru sudah dibuat, tetapi layar gagal membukanya. | Buka lagi lewat **Profiler**. Brief baru ada di daftar brief. |
 

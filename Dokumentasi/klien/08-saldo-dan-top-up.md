@@ -115,7 +115,7 @@ Punya kode promo? Di jendela Top Up, pilih **Punya kode promo?**, isi kodenya, l
 
 ## Aturan dan batasan
 
-- Untuk Top Up, hak akses Anda di brand harus penulis atau lebih tinggi. Akun dengan hak lebih rendah bisa melihat saldo dan melaporkan top up gagal. Namun, Top Up mereka ditolak dengan pesan "Brand not found". Bila Anda tidak yakin dengan hak akses Anda, tanyakan kepada pemilik brand.
+- Untuk Top Up, hak akses Anda di brand harus penulis atau lebih tinggi. Akun dengan hak lebih rendah bisa melihat saldo dan melaporkan top up gagal. Namun, Top Up mereka ditolak dengan pesan "Peran Anda belum bisa mengubah bagian ini". Bila Anda tidak yakin dengan hak akses Anda, tanyakan kepada pemilik brand.
 - Saldo tidak punya masa berlaku dan tidak hangus, berapa lama pun Anda belum memakainya.
 - Bila media tidak memutuskan dalam 3×24 jam (tiga hari tiga malam), publikasi batal sendiri dan nilainya kembali ke saldo.
 - Bila saldo tersedia dan uang tertahan brand Anda nol, Anda bisa menerima satu pengingat berjudul "Saldo kampanye masih kosong". Pengingat ini hanya muncul sekali dan hilang setelah saldo terisi.
