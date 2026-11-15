@@ -41,8 +41,12 @@ Kalau kampanye belum punya artikel atau publikasi terbit, kartu menulis **Belum 
 |---|---|---|
 | **Saldo Tersedia** | Saldo yang siap dipakai | Siap digunakan untuk publikasi |
 | **Kredit Tertahan** | Dana yang disisihkan untuk pesanan yang masih berjalan | Mengamankan pesanan aktif |
-| **Estimasi Jangkauan (Bulan Ini)** | Perkiraan jumlah orang yang terjangkau bulan ini | Perbandingan dengan bulan lalu: "Naik N% dari bulan lalu", "Turun N% dari bulan lalu", atau "Sama seperti bulan lalu". Kalau bulan lalu belum punya data, yang tampil hanya tanda strip |
+| **Estimasi Jangkauan (Bulan Ini)** | Perkiraan jumlah orang yang terjangkau bulan ini | Perbandingan dengan periode yang sama bulan lalu (tanggal 1 sampai hari ini, bukan bulan lalu penuh): "Naik N% dari periode yang sama bulan lalu", "Turun N% ...", atau "Tidak berubah ...". Kalau bulan lalu belum punya data, yang tampil hanya tanda strip |
 | **Total Klik (Smart Link)** | Jumlah klik yang tercatat pada bulan ini | Konversi tautan artikel aktif |
+
+### Grafik aktivitas
+
+Di bawah empat kartu angka ada grafik **Aktivitas 30 hari terakhir**. Garis biru adalah **Jangkauan (klik tautan)**, garis abu adalah **Klik Smart Link**. Angkanya dari sumber yang sama dengan kartu di atas, dihitung per hari menurut WIB. Arahkan kursor atau sentuh grafik untuk melihat angka satu hari. Kalau belum ada kejadian dalam 30 hari, grafik diganti pesan "Belum ada data. Terbitkan artikel pertama untuk mulai melihat grafik."
 
 > **Catatan:** Dua kartu pertama menulis angka dengan satuan **Kredit**. Kotak saldo di bagian atas layar dan halaman **Saldo** menulis jumlah uang dalam rupiah. Jadikan keduanya patokan jumlah uang Anda. Penjelasan lengkap ada di [Saldo dan Top Up](08-saldo-dan-top-up.md).
 

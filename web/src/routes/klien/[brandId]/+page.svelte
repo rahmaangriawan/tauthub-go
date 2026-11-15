@@ -19,6 +19,7 @@
 	import PageTitle from '$lib/components/page-title.svelte';
 	import HelpModal from '$lib/components/help-modal.svelte';
 	import GradientWave from '$lib/components/gradient-wave.svelte';
+	import ActivityChart from '$lib/components/activity-chart.svelte';
 	import { STAGE_LABEL, STAGE_TONE, DONE_STATUSES } from './taut-pintar/_shared';
 
 	// Palet brand untuk latar hero, dijaga di nada menengah supaya teks putih
@@ -65,10 +66,15 @@
 	function startOfMonth(d = new Date()) {
 		return new Date(d.getFullYear(), d.getMonth(), 1);
 	}
+	// Pembanding = bulan lalu pada rentang hari yang sama (tanggal 1 sampai hari
+	// ini). Dulu dibandingkan dengan bulan lalu penuh, sehingga di awal bulan
+	// hasilnya selalu "turun" hampir 100% walau tidak ada yang berubah.
 	function lastMonthRange() {
 		const now = new Date();
 		const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-		const to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+		const lastDay = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+		const day = Math.min(now.getDate(), lastDay);
+		const to = new Date(now.getFullYear(), now.getMonth() - 1, day, 23, 59, 59);
 		return { from, to };
 	}
 
@@ -102,6 +108,8 @@
 	let tcConfig = $state<{ rate_idr: number; topup_packages: Pkg[] } | null>(null);
 	let reports = $state<{ reach: number; clicks: number } | null>(null);
 	let prevReports = $state<{ reach: number; clicks: number } | null>(null);
+	// Deret harian 30 hari terakhir untuk grafik aktivitas.
+	let daily = $state<{ points: Array<{ date: string; reach: number; clicks: number }>; total_reach: number; total_clicks: number } | null>(null);
 	let pubs = $state<PubRow[]>([]);
 	let pubsTotal = $state(0);
 	// Kampanye Taut Pintar: sumber yang sama dengan menu Kampanye, jadi angkanya
@@ -132,7 +140,7 @@
 
 	async function load() {
 		try {
-			const [creditsRes, pubsRes, reportsRes, prevRes, campRes] = await Promise.all([
+			const [creditsRes, pubsRes, reportsRes, prevRes, campRes, dailyRes] = await Promise.all([
 				apiRequest(`/v1/brands/${brandId}/credits?limit=1`),
 				apiRequest(`/v1/brands/${brandId}/publications?limit=6`),
 				apiRequest(
@@ -141,7 +149,8 @@
 				apiRequest(
 					`/v1/brands/${brandId}/reports?from=${lastMonthRange().from.toISOString()}&to=${lastMonthRange().to.toISOString()}`
 				),
-				apiRequest(`/v1/brands/${brandId}/taut/campaigns?page=1`)
+				apiRequest(`/v1/brands/${brandId}/taut/campaigns?page=1`),
+				apiRequest(`/v1/brands/${brandId}/reports/daily?days=30`)
 			]);
 			if (creditsRes.ok) {
 				const cd = await creditsRes.json();
@@ -167,6 +176,10 @@
 			if (campRes.ok) {
 				const cd = await campRes.json();
 				campaigns = cd.campaigns ?? [];
+			}
+			if (dailyRes.ok) {
+				const dd = await dailyRes.json().catch(() => null);
+				daily = dd && Array.isArray(dd.points) ? dd : null;
 			}
 			const session = getStoredSession();
 			if (session?.user?.display_name) userName = session.user.display_name;
@@ -446,6 +459,22 @@
 				<span class="metricDesc">{i18n.t.dashboard.clicks_desc}</span>
 			</div>
 		</div>
+
+		<section class="activityCard" aria-label={i18n.t.dashboard.activity_title}>
+			<div class="activityHead">
+				<h3 class="activityTitle">{i18n.t.dashboard.activity_title}</h3>
+			</div>
+			{#if daily && daily.total_reach + daily.total_clicks > 0}
+				<ActivityChart
+					points={daily.points}
+					reachLabel={i18n.t.dashboard.activity_reach}
+					clicksLabel={i18n.t.dashboard.activity_clicks}
+					locale={i18n.locale}
+				/>
+			{:else}
+				<p class="activityEmpty">{i18n.t.dashboard.activity_empty}</p>
+			{/if}
+		</section>
 
 		<!-- ── INSIGHTS + FINANCE ───────────────────────────────────────── -->
 		<div class="insightsFinanceRow">
@@ -1044,6 +1073,27 @@
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 16px;
+	}
+	.activityCard {
+		margin-top: 16px;
+		padding: 20px;
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		background: var(--card);
+		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+	}
+	.activityHead {
+		margin-bottom: 4px;
+	}
+	.activityTitle {
+		margin: 0;
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.activityEmpty {
+		margin: 12px 0 4px;
+		font-size: 13px;
+		color: var(--muted-foreground);
 	}
 	.metricCard {
 		position: relative;

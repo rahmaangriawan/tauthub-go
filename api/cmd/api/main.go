@@ -374,6 +374,7 @@ func run() error {
 			authed.Post("/brands/{brandId}/credit-reports", brandFlowDeps.CreditReportsCreate)
 			authed.Get("/brands/{brandId}/pr-calculator", brandFlowDeps.PrCalculator)
 			authed.Get("/brands/{brandId}/reports", brandFlowDeps.ReportsGet)
+			authed.Get("/brands/{brandId}/reports/daily", brandFlowDeps.ReportsDaily)
 
 			// ---------- Alur brand lanjutan (/v1/brands/{brandId}) — fase 6–11 ----------
 			// Kampanye, publikasi, rencana publikasi, batch/varian, integrasi CMS,
