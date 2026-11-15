@@ -298,8 +298,8 @@ func (d *Deps) tautCampaignCharges(ctx context.Context, campaignID string) (writ
 		  COUNT(*) FILTER (WHERE ref_id LIKE 'taut-writer-regen:%') AS writer_regen_n,
 		  COALESCE(-SUM(amount_tc) FILTER (WHERE ref_id LIKE 'ai-image:%'), 0) AS image_tc,
 		  COUNT(*) FILTER (WHERE ref_id LIKE 'ai-image:%') AS image_n,
-		  COALESCE(-SUM(amount_tc) FILTER (WHERE ref_id LIKE 'taut-writer-derived:%'), 0) AS derived_tc,
-		  COUNT(*) FILTER (WHERE ref_id LIKE 'taut-writer-derived:%') AS derived_n
+		  COALESCE(-SUM(amount_tc) FILTER (WHERE ref_id LIKE 'taut-writer-derived:%' OR ref_id LIKE 'taut-writer-derived-regen:%'), 0) AS derived_tc,
+		  COUNT(*) FILTER (WHERE ref_id LIKE 'taut-writer-derived:%' OR ref_id LIKE 'taut-writer-derived-regen:%') AS derived_n
 		FROM credit_ledger_entries
 		WHERE split_part(ref_id, ':', 2) = $1`, campaignID)
 	if err != nil {

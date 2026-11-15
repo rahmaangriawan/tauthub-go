@@ -25,6 +25,7 @@ const ledgerCampaignExpr = `(CASE
 		WHEN e.ref_id LIKE 'taut-writer:%' THEN split_part(e.ref_id, ':', 2)
 		WHEN e.ref_id LIKE 'taut-writer-regen:%' THEN split_part(e.ref_id, ':', 2)
 		WHEN e.ref_id LIKE 'taut-writer-derived:%' THEN split_part(e.ref_id, ':', 2)
+		WHEN e.ref_id LIKE 'taut-writer-derived-regen:%' THEN split_part(e.ref_id, ':', 2)
 		WHEN e.ref_id LIKE 'ai-image:%' THEN split_part(e.ref_id, ':', 2)
 		WHEN e.ref_id LIKE 'profiler-%' THEN substring(e.ref_id from 10 for 36)
 		WHEN p.id IS NOT NULL THEN p.campaign_id::text
@@ -112,7 +113,7 @@ func (d *Deps) Credits(w http.ResponseWriter, r *http.Request) {
 			SELECT cd.title
 			FROM taut_campaign_media tcm
 			JOIN content_documents cd ON cd.id = tcm.article_document_id
-			WHERE e.ref_id ~ '^(taut-writer|taut-writer-regen|taut-writer-derived|ai-image):'
+			WHERE e.ref_id ~ '^(taut-writer|taut-writer-regen|taut-writer-derived|taut-writer-derived-regen|ai-image):'
 			  AND tcm.campaign_id::text = split_part(e.ref_id, ':', 2)
 			  AND tcm.media_id::text = split_part(e.ref_id, ':', 3)
 			ORDER BY (tcm.status = 'selected') DESC, tcm.created_at DESC

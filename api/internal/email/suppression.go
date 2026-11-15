@@ -17,6 +17,10 @@ import (
 // email tetap dikirim seperti biasa. Daftar ini hanya pengaman reputasi, tidak
 // boleh sampai menghentikan surel penting.
 
+// BounceSpikeThreshold: jumlah alamat yang masuk daftar mati dalam 24 jam yang
+// dianggap lonjakan. Dipakai sweeper peringatan admin dan ringkasan Operations.
+const BounceSpikeThreshold = 10
+
 // hardBounceHints: potongan pesan penolakan SMTP yang berarti alamat tujuan tidak
 // ada. Penolakan karena kebijakan atau spam (5.7.x) sengaja tidak termasuk,
 // karena itu bukan bukti alamatnya mati.

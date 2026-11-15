@@ -102,6 +102,14 @@ func (d *Deps) TautWriterBatchCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rawItems, _ := body["items"].([]any)
+	d.startWriterBatch(w, r, brandRow.ID, user.ID, campaignID, kind, opts, rawItems)
+}
+
+// startWriterBatch: inti pembuatan antrean, dipakai pembuatan baru dan "Coba
+// lagi". Memvalidasi tiap artikel, aturan satu antrean aktif per brand, batas 30
+// artikel, dan saldo di muka, lalu menyimpan antrean dan mengantre job pertama.
+func (d *Deps) startWriterBatch(w http.ResponseWriter, r *http.Request, brandID, userID, campaignID, kind string, opts writerBatchOptions, rawItems []any) {
+	ctx := r.Context()
 	type target struct {
 		MediaID string
 		Slot    int
@@ -173,7 +181,7 @@ func (d *Deps) TautWriterBatchCreate(w http.ResponseWriter, r *http.Request) {
 	if active, aerr := d.queryRow(ctx,
 		`SELECT id FROM taut_writer_batches
 		 WHERE brand_id = $1 AND status IN ('queued', 'running') AND updated_at > NOW() - INTERVAL '2 hours' LIMIT 1`,
-		brandRow.ID); aerr != nil {
+		brandID); aerr != nil {
 		d.writeErr(w, aerr)
 		return
 	} else if active != nil {
@@ -191,7 +199,7 @@ func (d *Deps) TautWriterBatchCreate(w http.ResponseWriter, r *http.Request) {
 		unit = d.effectiveImageCost(ctx)
 	}
 	need := unit * len(targets)
-	if remaining, _ := d.imageBalance(ctx, brandRow.ID); unit > 0 && remaining < need {
+	if remaining, _ := d.imageBalance(ctx, brandID); unit > 0 && remaining < need {
 		httpx.Error(w, http.StatusPaymentRequired,
 			"Saldo kredit tidak cukup: butuh "+itoa(need)+", tersedia "+itoa(remaining)+". Silakan top up terlebih dahulu.")
 		return
@@ -202,7 +210,7 @@ func (d *Deps) TautWriterBatchCreate(w http.ResponseWriter, r *http.Request) {
 	if err := d.exec(ctx,
 		`INSERT INTO taut_writer_batches (id, campaign_id, brand_id, user_id, kind, status, total, options)
 		 VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7::jsonb)`,
-		batchID, campaignID, brandRow.ID, user.ID, kind, len(targets), string(optsJSON)); err != nil {
+		batchID, campaignID, brandID, userID, kind, len(targets), string(optsJSON)); err != nil {
 		d.writeErr(w, err)
 		return
 	}
@@ -229,6 +237,63 @@ func (d *Deps) TautWriterBatchCreate(w http.ResponseWriter, r *http.Request) {
 		"id": batchID, "kind": kind, "status": "queued", "total": len(targets), "skipped": skipped,
 		"unit_credits": unit, "estimated_credits": need,
 	})
+}
+
+// TautWriterBatchRetry: POST .../writer-batches/{batchId}/retry
+// Antrean baru berisi hanya artikel yang gagal pada antrean lama, dengan jenis
+// dan opsi yang sama. Aturan antrean (satu aktif per brand, saldo di muka)
+// berlaku lagi lewat startWriterBatch.
+func (d *Deps) TautWriterBatchRetry(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	brandRow, err := d.access(r, chiParam(r, "brandId"), user.ID, "writer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	ctx := r.Context()
+	campaignID := chiParam(r, "campaignId")
+	old, err := d.queryRow(ctx,
+		`SELECT id, kind, status, options FROM taut_writer_batches WHERE id = $1 AND campaign_id = $2 AND brand_id = $3 LIMIT 1`,
+		chiParam(r, "batchId"), campaignID, brandRow.ID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if old == nil {
+		httpx.Error(w, http.StatusNotFound, "Antrean tidak ditemukan.")
+		return
+	}
+	if st := old.strOr("status", ""); st == "queued" || st == "running" {
+		httpx.Error(w, http.StatusConflict, "Antrean ini masih berjalan.")
+		return
+	}
+	var opts writerBatchOptions
+	switch v := old.raw("options").(type) {
+	case []byte:
+		_ = json.Unmarshal(v, &opts)
+	case string:
+		_ = json.Unmarshal([]byte(v), &opts)
+	case map[string]any:
+		if raw, merr := json.Marshal(v); merr == nil {
+			_ = json.Unmarshal(raw, &opts)
+		}
+	}
+	failed, err := d.queryRows(ctx,
+		`SELECT media_id, slot FROM taut_writer_batch_items WHERE batch_id = $1 AND status = 'failed' ORDER BY position`,
+		old.strOr("id", ""))
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if len(failed) == 0 {
+		httpx.Error(w, http.StatusConflict, "Tidak ada artikel yang gagal pada antrean ini.")
+		return
+	}
+	rawItems := make([]any, 0, len(failed))
+	for _, it := range failed {
+		rawItems = append(rawItems, map[string]any{"media_id": it.strOr("media_id", ""), "slot": float64(it.intOr("slot", 1))})
+	}
+	d.startWriterBatch(w, r, brandRow.ID, user.ID, campaignID, old.strOr("kind", ""), opts, rawItems)
 }
 
 // TautWriterBatchActive: GET .../taut/campaigns/{campaignId}/writer-batches/active
@@ -454,30 +519,9 @@ func (d *Deps) runBatchArticle(ctx context.Context, campaignID, brandID, userID,
 }
 
 func (d *Deps) runBatchDerived(ctx context.Context, campaignID, brandID, userID, mediaID string, slot int, o writerBatchOptions) error {
-	srcRow, err := d.queryRow(ctx, `
-		SELECT tcm.id, tcm.article_document_id, tcm.angle_slug, m.media_type
-		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
-		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.slot = $3 LIMIT 1`,
-		campaignID, o.SourceMediaID, o.SourceSlot)
+	src, srcRow, err := d.loadDerivedSource(ctx, campaignID, o.SourceMediaID, o.SourceSlot)
 	if err != nil {
 		return err
-	}
-	if srcRow == nil || !srcRow.has("article_document_id") {
-		return errUnprocessable("Artikel sumber tidak ditemukan.")
-	}
-	docID := srcRow.strOr("article_document_id", "")
-	doc, err := d.queryRow(ctx, "SELECT title, current_version FROM content_documents WHERE id = $1 LIMIT 1", docID)
-	if err != nil || doc == nil {
-		return errUnprocessable("Artikel sumber tidak ditemukan.")
-	}
-	ver, err := d.queryRow(ctx, "SELECT content FROM content_versions WHERE document_id = $1 AND version = $2 LIMIT 1",
-		docID, doc.intOr("current_version", 1))
-	if err != nil || ver == nil {
-		return errUnprocessable("Isi artikel sumber tidak ditemukan.")
-	}
-	srcText := strings.TrimSpace(stripHTMLToText(ver.strOr("content", "")))
-	if srcText == "" {
-		return errUnprocessable("Isi artikel sumber kosong.")
 	}
 	srcTopic := d.loadTautWriterTopic(ctx, campaignID, o.SourceMediaID, o.SourceSlot)
 	if strings.TrimSpace(o.Topic) != "" {
@@ -485,11 +529,8 @@ func (d *Deps) runBatchDerived(ctx context.Context, campaignID, brandID, userID,
 	}
 	name := d.mediaNameFor(ctx, mediaID)
 	opts := tautWriterOptions{
-		Topic: srcTopic,
-		Derived: &tautDerivedSource{
-			MediaID: o.SourceMediaID, Slot: o.SourceSlot, MediaName: d.mediaNameFor(ctx, o.SourceMediaID),
-			Title: doc.strOr("title", ""), Text: srcText,
-		},
+		Topic:           srcTopic,
+		Derived:         src,
 		ChargeRefPrefix: derivedChargePrefix,
 		ChargeCredits:   d.derivativeCreditCost(ctx),
 		ChargeReason:    "Taut Pintar — artikel turunan untuk " + name,

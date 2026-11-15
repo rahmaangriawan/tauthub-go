@@ -63,6 +63,11 @@ func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
 		       AND cmi.status <> 'cancelled') AS articles_created,
 		  (SELECT COUNT(*) FROM publications p WHERE p.campaign_id = c.id AND p.status = 'published') AS published_count,
 		  (SELECT COUNT(DISTINCT p.media_id) FROM publications p WHERE p.campaign_id = c.id AND p.status = 'published') AS media_published_count,
+		  (SELECT COUNT(*) FROM publications p JOIN publication_link_checks lc ON lc.publication_id = p.id
+		     WHERE p.campaign_id = c.id AND p.status = 'published' AND lc.state = 'live') AS link_live_count,
+		  (SELECT ROUND(AVG(sm.da)::numeric, 1) FROM media_seo_metrics sm
+		     WHERE sm.da IS NOT NULL AND sm.media_id IN (
+		       SELECT p.media_id FROM publications p WHERE p.campaign_id = c.id AND p.status = 'published')) AS avg_da,
 		  (SELECT STRING_AGG(DISTINCT m.name, ' · ') FROM publications p JOIN media m ON m.id = p.media_id
 		     WHERE p.campaign_id = c.id AND p.status = 'published') AS published_media_names,
 		  (SELECT COALESCE(SUM(t.used_tc), 0) FROM (
@@ -149,6 +154,9 @@ func (d *Deps) CampaignReportGet(w http.ResponseWriter, r *http.Request) {
 			"articles_created":      summary.intOr("articles_created", 0),
 			"published_count":       summary.intOr("published_count", 0),
 			"media_published_count": summary.intOr("media_published_count", 0),
+			// Hasil agregat untuk tautan publik: tanpa rincian biaya.
+			"link_live_count": summary.intOr("link_live_count", 0),
+			"avg_da":          summary.raw("avg_da"),
 			"published_media_names": summary.raw("published_media_names"),
 			"tc_used":               summary.numOr("tc_used"),
 		},

@@ -584,3 +584,23 @@ func (d *Deps) writerCreditCostSetting(ctx context.Context) int {
 	}
 	return 2
 }
+
+// derivativeCreditCostSetting: tarif artikel turunan dari platform_settings.
+// Default 1500, sama dengan brandflow.defaultDerivativeCreditCost.
+func (d *Deps) derivativeCreditCostSetting(ctx context.Context) int {
+	row, err := d.queryRow(ctx, "SELECT value FROM platform_settings WHERE key = 'writer_derivative_credit_cost' LIMIT 1")
+	if err == nil && row != nil {
+		if n, convErr := strconv.Atoi(strings.TrimSpace(row.strOr("value", ""))); convErr == nil && n > 0 {
+			return n
+		}
+	}
+	return 1500
+}
+
+// aiConfigWithDerivative: konfigurasi AI untuk halaman admin, ditambah tarif
+// artikel turunan.
+func (d *Deps) aiConfigWithDerivative(ctx context.Context, rt *ai.AIRuntime) map[string]any {
+	out := aiConfigJSON(d.aiStoredConfig(ctx), rt, d.writerCreditCostSetting(ctx))
+	out["writer_derivative_credit_cost"] = d.derivativeCreditCostSetting(ctx)
+	return out
+}

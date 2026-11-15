@@ -159,7 +159,7 @@ func (d *Deps) AIConfigurationGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, d, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, aiConfigJSON(d.aiStoredConfig(r.Context()), rt, d.writerCreditCostSetting(r.Context())))
+	writeJSON(w, http.StatusOK, d.aiConfigWithDerivative(r.Context(), rt))
 }
 
 // AIConfigurationPut: PUT /v1/platform/ai/configuration
@@ -248,6 +248,20 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 		}
 		writerCreditCost = int(f)
 		setWriterCreditCost = true
+	}
+
+	// Tarif artikel turunan ("Pakai artikel untuk media lain"), lebih murah dari
+	// penulisan biasa. Dibaca penagihan brandflow dari kunci yang sama.
+	var derivativeCreditCost int
+	setDerivativeCreditCost := false
+	if raw, present := body["writer_derivative_credit_cost"]; present && raw != nil {
+		f, isNum := raw.(float64)
+		if !isNum || f < 1 || f > 100000 || f != float64(int(f)) {
+			writeErr(w, d, errUnprocessable("Harga kredit artikel untuk media lain harus bilangan bulat 1 sampai 100000."))
+			return
+		}
+		derivativeCreditCost = int(f)
+		setDerivativeCreditCost = true
 	}
 
 	base := aiNormalizeURL(baseRaw)
@@ -395,11 +409,20 @@ func (d *Deps) AIConfigurationPut(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if setDerivativeCreditCost {
+		if err := d.exec(ctx,
+			`INSERT INTO platform_settings (key, value, updated_at) VALUES ('writer_derivative_credit_cost', $1, NOW())
+			 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+			strconv.Itoa(derivativeCreditCost)); err != nil {
+			writeErr(w, d, err)
+			return
+		}
+	}
 	d.audit(ctx, user.ID, "platform.ai.configuration_updated", "platform_ai_configuration", "default")
 	ai.InvalidateRuntimeCache()
 
 	rt, _ := ai.LoadAIRuntime(ctx, d.Pool)
-	writeJSON(w, http.StatusOK, aiConfigJSON(d.aiStoredConfig(ctx), rt, d.writerCreditCostSetting(ctx)))
+	writeJSON(w, http.StatusOK, d.aiConfigWithDerivative(ctx, rt))
 }
 
 // aiTail: n karakter terakhir (parity slice(-4)).

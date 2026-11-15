@@ -177,6 +177,21 @@
 					</div>
 				</div>
 
+				{#if report.summary.published_count > 0}
+					<div class="docStats docResult">
+						<div>
+							<span class="docStatLabel">{tr('Link hidup')}</span>
+							<span class="docStatValue">{report.summary.link_live_count ?? 0} {tr('dari')} {report.summary.published_count}</span>
+						</div>
+						{#if report.summary.avg_da != null}
+							<div>
+								<span class="docStatLabel">{tr('Rata-rata DA media')}</span>
+								<span class="docStatValue">{report.summary.avg_da}</span>
+							</div>
+						{/if}
+					</div>
+				{/if}
+
 				<section class="docSection">
 					<h2 class="docSectionTitle">{tr("Media yang menerbitkan")}</h2>
 					{#if report.summary.published_media_names}
@@ -379,6 +394,9 @@
 	.docStats > div + div {
 		border-left: 1px solid color-mix(in srgb, var(--primary) 14%, transparent);
 		padding-left: 20px;
+	}
+	.docResult {
+		margin-top: 10px;
 	}
 	.docStatLabel {
 		display: block;

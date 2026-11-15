@@ -24,7 +24,7 @@ Jendela ini berjudul **Berita Acara Kampanye** dengan keterangan "Detail kampany
 | **Jenis media** | Jenis media kampanye, atau "Belum dipilih" bila belum ada. |
 | **Mulai** | Tanggal kampanye dimulai. |
 | **Artikel**, **Media terbit**, **Terpakai** | Jumlah artikel, jumlah publikasi yang sudah terbit, dan jumlah biaya yang sudah ditagihkan (dalam rupiah, sama seperti **Anggaran terserap** di kartu). |
-| **Tautan share publik** | Kolom berisi alamat tautan dengan tombol **Salin**. |
+| **Tautan share publik** | Kolom berisi alamat tautan dengan tombol **Salin**, **Buka laporan** (membuka halaman berita acara di tab baru), dan **Cabut**. |
 
 Klik tanda silang atau area gelap di luar jendela untuk menutupnya.
 
@@ -35,6 +35,7 @@ Halaman ini menampilkan kartu dokumen di atas latar dashboard Tauthub yang buram
 - Logo Tauthub dan tombol **Cetak / Simpan PDF**.
 - Nama brand, judul kampanye, lencana status kampanye (biasanya **Aktif**), tanggal dibuat, dan deskripsi kampanye bila ada.
 - Empat angka ringkasan: **Artikel dibuat**, **Artikel terbit**, **Media terbit**, dan **Saldo terpakai**.
+- Blok **Hasil** (muncul bila sudah ada artikel terbit): **Link hidup N dari M**, yaitu berapa artikel terbit yang masih bisa dibuka menurut pemantauan Link Guardian, dan **Rata-rata DA media** dari media yang menerbitkan. Hanya angka agregat, tanpa rincian biaya.
 - Bagian **Media yang menerbitkan** berisi nama media yang sudah menayangkan artikel. Bila belum ada, tertulis "Belum ada artikel yang terbit."
 - Bagian **Daftar publikasi**. Setiap baris memuat gambar sampul (atau kotak abu bila tidak ada), judul artikel dan nama media, tanggal terbit atau tanggal dibuat, kategori media, tautan **Lihat terbit**, dan lencana status publikasi. Lencana hijau untuk yang terbit, merah untuk yang gagal atau ditolak, dan kuning untuk status lain. Bila belum ada publikasi, tertulis "Belum ada publikasi dalam kampanye ini."
 - Catatan kaki berisi tanggal dan jam dokumen dibuat (bertanda WIB, yaitu waktu Indonesia bagian barat). Ada juga keterangan bahwa saldo terpakai mencakup biaya membuat dan mengirim konten kampanye.

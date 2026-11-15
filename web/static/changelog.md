@@ -35,12 +35,16 @@ Catatan:
 - **Pakai artikel untuk media lain**: dari satu artikel, Tauthub menulis versi untuk media lain dengan topik dan fakta yang sama tetapi kalimat dan susunan berbeda, supaya tidak dianggap duplikat. Biayanya lebih murah dan tampil di Total Tagihan Akhir.
 - **Ringkasan kekurangan di bilah bawah**: halaman Penyedia Konten kini menyebut langsung apa yang kurang (misalnya artikel atau cover), dan satu klik membawamu ke barisnya.
 - **Aksi massal**: generate, buat cover, dan hapus untuk artikel yang dicentang.
+- **Coba lagi yang gagal**: artikel yang belum berhasil dibuat di antrean bisa diulang sekali klik tanpa mengulang yang sudah selesai.
+- **Rujukan saat mengulang kampanye**: di kampanye hasil Ulangi kampanye, artikel kampanye lama tampil sebagai rujukan baca-saja (thumbnail, judul, nama media). Tombol Ulangi kampanye juga ada di halaman Ringkasan.
+- **Laporan kampanye lebih lengkap**: tautan Berita Acara kini menampilkan Link hidup N dari M dan rata-rata DA media, plus tombol Buka laporan.
 
 ### Perbaikan
 - Tab Entitas sekarang menampilkan nama alternatif, kanal resmi, serta keyword dan URL target yang sudah kamu isi.
 - Persentase kelengkapan brief kini disertai daftar isian yang masih kosong, dan formulir Instan Brief menandai kolom yang ikut dihitung untuk 100%.
 - Kabar artikel gagal terbit ditulis dengan kalimat biasa, tanpa istilah teknis.
 - Pesan saat peranmu belum cukup untuk suatu aksi kini jelas dan berbahasa Indonesia.
+- Menulis ulang artikel untuk media lain kini memakai tarif yang sama dengan membuatnya, dan kemiripannya dicek juga terhadap artikel turunan lainnya.
 
 ## v0.6.4 — 2026-11-12
 

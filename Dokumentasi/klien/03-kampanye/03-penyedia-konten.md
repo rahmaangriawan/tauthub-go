@@ -111,6 +111,8 @@ Centang kotak di baris artikel atau di header media. Bar **N media dipilih** mun
 
 Antrean berjalan di server, jadi halaman boleh ditutup. Di atas daftar tampil hitungan seperti "2 dari 3 selesai", dan tiap baris menunjukkan statusnya (**Antre**, sedang menulis, atau alasan kalau belum berhasil). Saat semuanya selesai, notifikasi lonceng memberi tahu.
 
+Kalau ada artikel yang belum berhasil, strip antrean menampilkan tombol **Coba lagi yang gagal (N)**. Tombol itu membuat antrean baru berisi hanya artikel yang gagal, dengan topik, gaya, brief, dan sumber yang sama.
+
 Aturan antrean:
 
 - Paling banyak 30 artikel per antrean, dan satu antrean aktif per brand. Antrean kedua baru bisa dimulai setelah yang pertama selesai.
@@ -129,6 +131,7 @@ Pada artikel yang sudah ada isinya, klik ikon **Pakai artikel untuk media lain**
 - Tauthub menulis artikel baru untuk tiap media dengan **topik, sudut, gaya, brief, dan fakta yang sama** dengan artikel asal, tetapi kalimat dan susunannya berbeda, supaya tidak dianggap konten duplikat.
 - Fakta, angka, nama, dan kutipan tidak berubah. Judul, pembuka, urutan, dan kalimat ditulis ulang.
 - Setelah ditulis, hasilnya dibandingkan dengan artikel asal. Kalau terlalu mirip, Tauthub menulis ulang sekali. Kalau masih mirip, artikel tetap disimpan dengan tanda **Mirip artikel asal** di barisnya. Sebaiknya Anda mengedit artikel itu sebelum terbit.
+- Menulis ulang artikel turunan memakai tarif turunan yang sama (bukan tarif tulis ulang biasa), tetap berpijak pada artikel asal, dan kemiripannya dicek terhadap artikel asal serta artikel turunan lain dari sumber yang sama.
 - Biaya per artikel lebih murah daripada penulisan biasa (tarifnya tertera di panel) dan tampil sebagai baris **Artikel untuk media lain** di rincian TOTAL TAGIHAN AKHIR.
 - Baris artikel turunan memuat keterangan "Dari artikel <nama media asal>".
 - Kalau artikel asal Anda tulis atau unggah sendiri, panel menampilkan peringatan: konten yang dipakai berulang di beberapa media bisa ditolak oleh mitra, dan sebaiknya Anda menulis ulang sendiri untuk tiap media. Anda tetap bisa melanjutkan setelah mencentang pernyataan di panel.

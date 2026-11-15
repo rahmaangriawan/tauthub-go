@@ -25,6 +25,7 @@
 		image_api_key_hint?: string | null;
 		image_credit_cost: number;
 		writer_credit_cost: number;
+		writer_derivative_credit_cost?: number;
 	};
 
 	type LogEvent = {
@@ -70,6 +71,7 @@
 	let formImageCost = $state('2');
 	// Tarif penulisan The Writer — satu angka, berlaku rata (baru maupun ulang).
 	let formWriterCost = $state('2');
+	let formDerivativeCost = $state('1500');
 
 	// Nilai chat yang tersimpan — dikirim balik saat PUT supaya tidak tertimpa.
 	let chat = $state({ base_url: '', default_model: '', economy_model: '', premium_model: '' });
@@ -133,6 +135,7 @@
 			apiKeyTouched = false;
 			formImageCost = String(data.image_credit_cost ?? 2);
 			formWriterCost = String(data.writer_credit_cost ?? 2);
+			formDerivativeCost = String(data.writer_derivative_credit_cost ?? 1500);
 		} catch {
 			error = tr('Tidak dapat terhubung ke server API. Pastikan API aktif lalu coba lagi.');
 		}
@@ -184,6 +187,11 @@
 			error = 'Harga kredit penulisan harus bilangan bulat 0 sampai 100000.';
 			return;
 		}
+		const derivativeCostNum = Number(formDerivativeCost);
+		if (!Number.isInteger(derivativeCostNum) || derivativeCostNum < 1 || derivativeCostNum > 100000) {
+			error = 'Harga kredit artikel untuk media lain harus bilangan bulat 1 sampai 100000.';
+			return;
+		}
 		busy = true;
 		notice = '';
 		error = '';
@@ -199,6 +207,7 @@
 					image_model: formModel.trim(),
 					image_credit_cost: costNum,
 					writer_credit_cost: writerCostNum,
+					writer_derivative_credit_cost: derivativeCostNum,
 					image_api_key: apiKeyTouched ? formApiKey.trim() : undefined
 				})
 			});
@@ -584,9 +593,24 @@
 						<p class="mt-2 max-w-md text-xs text-muted-foreground">
 							Berlaku <strong>rata</strong>: artikel baru maupun tulis ulang dihargai sama. Satu angka ini dipakai untuk menagih sekaligus menampilkan estimasi biaya di halaman klien — jadi tampilan tidak bisa berbeda dari tagihan.
 						</p>
+						<label class="mt-5 block max-w-xs">
+							<span class="text-sm font-medium">Kredit per artikel untuk media lain</span>
+							<input
+								class="app-input mt-1 w-full"
+								type="number"
+								min="1"
+								max="100000"
+								step="1"
+								value={formDerivativeCost}
+								oninput={(e) => (formDerivativeCost = (e.currentTarget as HTMLInputElement).value)}
+							/>
+						</label>
+						<p class="mt-2 max-w-md text-xs text-muted-foreground">
+							Tarif tombol <strong>Pakai artikel untuk media lain</strong>, termasuk tulis ulang artikel turunan. Dibuat lebih murah dari penulisan biasa karena fakta sudah ada dari artikel asal. Minimal 1. Dipakai untuk menagih sekaligus menampilkan estimasi di panel klien.
+						</p>
 						<div class="mt-4 flex items-center gap-2">
 							<button class="app-btn app-btn-primary" type="submit" disabled={busy}>{busy ? 'Menyimpan…' : tr('Simpan harga')}</button>
-							{#if config}<span class="text-xs text-muted-foreground">Gambar: {config.image_credit_cost} kredit · Penulisan: {config.writer_credit_cost ?? 2} kredit</span>{/if}
+							{#if config}<span class="text-xs text-muted-foreground">Gambar: {config.image_credit_cost} kredit · Penulisan: {config.writer_credit_cost ?? 2} kredit · Artikel untuk media lain: {config.writer_derivative_credit_cost ?? 1500} kredit</span>{/if}
 						</div>
 					</form>
 				</div>

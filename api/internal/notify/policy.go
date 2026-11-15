@@ -94,6 +94,7 @@ var policies = map[string]ChannelPolicy{
 	"publication.waiting_partner":    {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.waiting_long":       {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"writer.batch_done":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
+	"email.bounce_spike":              {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierInfo},
 	"publication.draft_sent":         {InApp: true, Push: true, Email: ModeOff, WA: ModeImmediate, Tier: TierDeadline},
 	"publication.revision_requested": {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},
 	"publication.url_requested":      {InApp: true, Push: true, Email: ModeOff, WA: ModeOff, Tier: TierDeadline},

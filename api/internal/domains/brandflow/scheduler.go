@@ -107,6 +107,7 @@ func (d *Deps) RunScheduler(ctx context.Context, maxJobs int, runner *jobs.Runne
 
 	// 2b. Kabar ke klien: artikel yang sudah lama menunggu persetujuan media.
 	d.schSweepClientWaiting(ctx, schMinInt(maxJobs, 20))
+	d.schSweepBounceSpike(ctx)
 
 	// 3. Pengingat mitra mendekati batas approve (window 2 jam).
 	res.PartnerRemindersSent = d.schSweepPartnerDeadlines(ctx, schMinInt(maxJobs, 20), false)
@@ -508,6 +509,37 @@ func (d *Deps) schEnqueueDuePublications(ctx context.Context, limit int) int {
 		enqueued++
 	}
 	return enqueued
+}
+
+// schSweepBounceSpike: peringatan ke admin platform bila alamat yang masuk daftar
+// mati (hard bounce) dalam 24 jam mencapai ambang. Murah: satu COUNT per siklus.
+// Sekali per hari kalender; isinya jumlah, tiga domain penerima terbanyak, dan
+// tautan ke halaman Alamat Email Mati.
+func (d *Deps) schSweepBounceSpike(ctx context.Context) {
+	row, err := d.queryRow(ctx,
+		"SELECT COUNT(*) AS n FROM email_suppressions WHERE created_at > NOW() - INTERVAL '24 hours'")
+	if err != nil || row == nil || row.intOr("n", 0) < email.BounceSpikeThreshold {
+		return
+	}
+	already, err := d.queryRow(ctx,
+		"SELECT 1 AS x FROM notifications WHERE type = 'email.bounce_spike' AND created_at >= date_trunc('day', NOW()) LIMIT 1")
+	if err != nil || already != nil {
+		return
+	}
+	count := row.intOr("n", 0)
+	body := itoa(count) + " alamat email masuk daftar mati dalam 24 jam terakhir (ambang " + itoa(email.BounceSpikeThreshold) + ")."
+	if top, terr := d.queryRows(ctx, `
+		SELECT split_part(email, '@', 2) AS domain, COUNT(*) AS n
+		FROM email_suppressions WHERE created_at > NOW() - INTERVAL '24 hours'
+		GROUP BY 1 ORDER BY n DESC, domain LIMIT 3`); terr == nil && len(top) > 0 {
+		parts := make([]string, 0, len(top))
+		for _, t := range top {
+			parts = append(parts, t.strOr("domain", "-")+" ("+itoa(t.intOr("n", 0))+")")
+		}
+		body += " Domain terbanyak: " + strings.Join(parts, ", ") + "."
+	}
+	link := "/admin/email-suppressions"
+	d.notifyPlatformAdmins(ctx, "email.bounce_spike", "Bounce email melonjak", body, &link)
 }
 
 // schSweepClientWaiting: klien diberi kabar sekali per artikel bila artikelnya

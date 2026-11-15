@@ -114,3 +114,77 @@ func shingleSimilarity(candidate, source string) float64 {
 	}
 	return float64(hit) / float64(len(a))
 }
+
+// loadDerivedSource memuat artikel asal sebagai rujukan fakta: judul, teks, dan
+// nama media. Mengembalikan juga baris penempatan asal (id, sudut, jenis media)
+// supaya pemanggil bisa mewarisi gaya, brief, dan sudutnya.
+func (d *Deps) loadDerivedSource(ctx context.Context, campaignID, srcMediaID string, srcSlot int) (*tautDerivedSource, bsRow, error) {
+	if srcSlot < 1 {
+		srcSlot = 1
+	}
+	srcRow, err := d.queryRow(ctx, `
+		SELECT tcm.id, tcm.article_document_id, tcm.angle_slug, m.media_type
+		FROM taut_campaign_media tcm JOIN media m ON m.id = tcm.media_id
+		WHERE tcm.campaign_id = $1 AND tcm.media_id = $2 AND tcm.slot = $3 LIMIT 1`,
+		campaignID, srcMediaID, srcSlot)
+	if err != nil {
+		return nil, nil, err
+	}
+	if srcRow == nil || !srcRow.has("article_document_id") {
+		return nil, nil, errUnprocessable("Artikel sumber tidak ditemukan.")
+	}
+	docID := srcRow.strOr("article_document_id", "")
+	doc, err := d.queryRow(ctx, "SELECT title, current_version FROM content_documents WHERE id = $1 LIMIT 1", docID)
+	if err != nil || doc == nil {
+		return nil, nil, errUnprocessable("Artikel sumber tidak ditemukan.")
+	}
+	ver, err := d.queryRow(ctx, "SELECT content FROM content_versions WHERE document_id = $1 AND version = $2 LIMIT 1",
+		docID, doc.intOr("current_version", 1))
+	if err != nil || ver == nil {
+		return nil, nil, errUnprocessable("Isi artikel sumber tidak ditemukan.")
+	}
+	text := strings.TrimSpace(stripHTMLToText(ver.strOr("content", "")))
+	if text == "" {
+		return nil, nil, errUnprocessable("Isi artikel sumber kosong.")
+	}
+	return &tautDerivedSource{
+		MediaID: srcMediaID, Slot: srcSlot, MediaName: d.mediaNameFor(ctx, srcMediaID),
+		Title: doc.strOr("title", ""), Text: text,
+	}, srcRow, nil
+}
+
+// siblingDerivedTexts: teks artikel turunan lain dari sumber yang sama (selain
+// media dan slot yang sedang ditulis). Hanya dipakai untuk pemeriksaan
+// kemiripan; tidak masuk prompt.
+func (d *Deps) siblingDerivedTexts(ctx context.Context, campaignID string, src *tautDerivedSource, mediaID string, slot int) []string {
+	rows, err := d.queryRows(ctx, `
+		SELECT cv.content
+		FROM taut_campaign_media t
+		JOIN content_documents cd ON cd.id = t.article_document_id
+		JOIN content_versions cv ON cv.document_id = cd.id AND cv.version = cd.current_version
+		WHERE t.campaign_id = $1 AND t.derived_from_media_id = $2 AND t.derived_from_slot = $3
+		  AND NOT (t.media_id = $4 AND t.slot = $5)
+		LIMIT 12`, campaignID, src.MediaID, src.Slot, mediaID, slot)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		if t := strings.TrimSpace(stripHTMLToText(r.strOr("content", ""))); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// derivedScore: skor kemiripan tertinggi terhadap artikel asal dan artikel
+// turunan lain dari sumber yang sama.
+func derivedScore(candidate string, src *tautDerivedSource, siblings []string) float64 {
+	best := shingleSimilarity(candidate, src.Text)
+	for _, sib := range siblings {
+		if v := shingleSimilarity(candidate, sib); v > best {
+			best = v
+		}
+	}
+	return best
+}

@@ -489,6 +489,7 @@ func run() error {
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/generate", resolveCampaign(brandFlowDeps.ArticleImageGenerate))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/writer-batches", resolveCampaign(brandFlowDeps.TautWriterBatchCreate))
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/writer-batches/active", resolveCampaign(brandFlowDeps.TautWriterBatchActive))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/writer-batches/{batchId}/retry", resolveCampaign(brandFlowDeps.TautWriterBatchRetry))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/upload", resolveCampaign(brandFlowDeps.ArticleImageUpload))
 			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/images/{imageId}", resolveCampaign(brandFlowDeps.ArticleImageDelete))
 
@@ -513,6 +514,7 @@ func run() error {
 			// postingan berikutnya di waktu lain.
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/rounds", resolveCampaign(tautDeps.TautCampaignNewRound))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/duplicate", resolveCampaign(tautDeps.TautCampaignDuplicate))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/previous-articles", resolveCampaign(tautDeps.TautPreviousArticles))
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidateGet))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/validate", resolveCampaign(tautDeps.TautCampaignValidatePost))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/schedule", resolveCampaign(tautDeps.TautCampaignSchedule))

@@ -574,6 +574,7 @@ let revoking = $state(false);
 							{#if copied}<Check size={15} />{/if}
 							{copied ? tr('Tersalin') : tr('Salin')}
 						</button>
+						<a class="app-btn app-btn-soft shareOpenBtn" href={shareUrl} target="_blank" rel="noopener noreferrer">{tr('Buka laporan')}</a>
 						<button class="app-btn app-btn-soft shareRevokeBtn" type="button" disabled={revoking} onclick={() => void revokeShare()}>
 							{#if revoking}<LoaderCircle size={14} class="animate-spin" />{/if} {tr('Cabut')}
 						</button>
@@ -905,6 +906,13 @@ let revoking = $state(false);
 		flex: 0 0 auto;
 		height: 44px;
 		min-width: 96px;
+	}
+	.shareOpenBtn {
+		flex: 0 0 auto;
+		height: 44px;
+		display: inline-flex;
+		align-items: center;
+		text-decoration: none;
 	}
 	.shareRevokeBtn {
 		flex: 0 0 auto;

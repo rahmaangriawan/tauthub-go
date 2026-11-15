@@ -397,6 +397,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	item, err := d.queryRow(ctx, `
 		SELECT tcm.id, tcm.media_id, tcm.article_document_id, tcm.regen_count, tcm.angle_slug,
+		       tcm.derived_from_media_id, tcm.derived_from_slot,
 		       m.media_type, m.category, m.website_url, m.allow_hyperlink, m.max_links,
 		       m.allow_heading,
 		       m.label_sponsor, m.link_rel, m.word_count_mode, m.topik_terlarang, m.bahasa_artikel,
@@ -520,9 +521,20 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 			return writerItemResult{}, errStatus(500, "Batas jatah generate akun tercapai: sudah "+
 				itoa(used)+"x generate dari kuota "+itoa(quota)+"x. Ubah jatahnya di halaman Admin Users bila perlu.")
 		}
+		// Artikel turunan: tulis ulang tetap berpijak pada artikel asal (dimuat
+		// ulang dari media asal) dan memakai tarif turunan dengan ledger sendiri.
+		regenPrefix, regenCost, regenReason := "taut-writer-regen:", d.writerCreditCost(ctx), "Taut Pintar — regenerasi artikel AI"
+		if derived == nil && item.has("derived_from_media_id") {
+			if src, _, serr := d.loadDerivedSource(ctx, campaignID, item.strOr("derived_from_media_id", ""), item.intOr("derived_from_slot", 1)); serr == nil {
+				derived = src
+			}
+		}
+		if derived != nil {
+			regenPrefix, regenCost, regenReason = "taut-writer-derived-regen:", d.derivativeCreditCost(ctx), "Taut Pintar — tulis ulang artikel untuk media lain"
+		}
 		if err := d.chargeCredit(ctx, brandID,
-			"taut-writer-regen:"+campaignID+":"+item.strOr("media_id", "")+":"+itoa(regenCount+1),
-			d.writerCreditCost(ctx), "Taut Pintar — regenerasi artikel AI", userID); err != nil {
+			regenPrefix+campaignID+":"+item.strOr("media_id", "")+":"+itoa(regenCount+1),
+			regenCost, regenReason, userID); err != nil {
 			return writerItemResult{}, err
 		}
 	}
@@ -1008,11 +1020,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	// SEKALI dengan instruksi yang lebih keras, dan pakai hasil yang lebih berbeda.
 	derivedSim := 0.0
 	if derived != nil {
-		derivedSim = shingleSimilarity(stripHTMLToText(contentHTML), derived.Text)
+		siblings := d.siblingDerivedTexts(ctx, campaignID, derived, mediaID, slot)
+		derivedSim = derivedScore(stripHTMLToText(contentHTML), derived, siblings)
 		if derivedSim > derivedSimilarityMax {
 			if retry, rerr := d.runTautAgent(ctx, writerAgent, campaignID, prompt+"\n"+derivedRetryInstruction(), &mediaID, true); rerr == nil {
 				if p2, ok := contentengine.ParseWriterPayload(retry.Content); ok && strings.TrimSpace(p2.ContentHTML) != "" {
-					if sim2 := shingleSimilarity(stripHTMLToText(p2.ContentHTML), derived.Text); sim2 < derivedSim {
+					if sim2 := derivedScore(stripHTMLToText(p2.ContentHTML), derived, siblings); sim2 < derivedSim {
 						contentHTML = truncateString(p2.ContentHTML, 200000)
 						if t := truncateString(p2.Title, 300); t != "" {
 							title = t

@@ -404,6 +404,45 @@
 		}
 	}
 
+	// Artikel kampanye sebelumnya (hanya bila kampanye ini hasil "Ulangi kampanye"):
+	// rujukan baca-saja berisi thumbnail, judul, dan nama media kecil.
+	type PrevArticle = { media_id: string; slot: number; media_name: string; title: string; thumbnail: string | null };
+	let prevCampaignName = $state('');
+	let prevArticles = $state<PrevArticle[]>([]);
+	let prevOpen = $state(true);
+	async function loadPrev() {
+		try {
+			const res = await apiRequest(`${apiBase}/previous-articles`);
+			if (!res.ok) return;
+			const data = await res.json().catch(() => null);
+			prevCampaignName = String(data?.campaign?.name ?? '');
+			prevArticles = Array.isArray(data?.items) ? data.items : [];
+		} catch {
+			/* rujukan hanya penerang: gagal dimuat tidak mengganggu halaman */
+		}
+	}
+
+	let wbRetryBusy = $state(false);
+	/** Antrean baru berisi hanya artikel yang gagal pada antrean ini. */
+	async function retryWb() {
+		if (!wb || wb.failed === 0 || wbRetryBusy || wbActive) return;
+		wbRetryBusy = true;
+		try {
+			const res = await apiRequest(`${apiBase}/writer-batches/${wb.id}/retry`, { method: 'POST' });
+			if (!res.ok) {
+				error = await readApiError(res, tr('Gagal mengulang antrean.'));
+			} else {
+				wbDismissed = '';
+				await loadWb();
+				void load();
+			}
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : tr('Gagal mengulang antrean.');
+		} finally {
+			wbRetryBusy = false;
+		}
+	}
+
 	function wbItemOf(item: PlacementItem): WbItem | undefined {
 		return wb?.items.find((i) => i.media_id === item.media_id && i.slot === (item.slot ?? 1));
 	}
@@ -850,6 +889,7 @@
 		if (!wbBooted) {
 			wbBooted = true;
 			void loadWb();
+			void loadPrev();
 		}
 		try {
 			const [placeRes, linksRes, draftRes, auditsRes] = await Promise.all([
@@ -2399,6 +2439,40 @@
 				</div>
 			{/if}
 
+			{#if prevArticles.length > 0}
+				<section class="mt-3 rounded-[5px] border border-slate-200 bg-white shadow-2xs" aria-label={tr('Artikel kampanye sebelumnya')}>
+					<button type="button" class="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left" aria-expanded={prevOpen} onclick={() => (prevOpen = !prevOpen)}>
+						<span class="text-xs font-semibold text-slate-700">
+							{tr('Artikel kampanye sebelumnya')}
+							<span class="font-normal text-slate-500">· {prevCampaignName} · {prevArticles.length} {tr('artikel')}</span>
+						</span>
+						<ChevronDown size={14} class="shrink-0 text-slate-400 transition-transform {prevOpen ? 'rotate-180' : ''}" />
+					</button>
+					{#if prevOpen}
+						<div class="border-t border-slate-100 px-3.5 py-3">
+							<p class="mb-2.5 text-[11px] text-slate-500">{tr('Hanya untuk rujukan. Artikel ini tidak ikut ke kampanye baru.')}</p>
+							<ul class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+								{#each prevArticles as pa (pa.media_id + ':' + pa.slot)}
+									<li class="flex items-center gap-2.5 rounded-[5px] border border-slate-200/80 bg-slate-50/60 p-2">
+										<div class="flex h-11 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-slate-200/80 bg-slate-100">
+											{#if pa.thumbnail}
+												<img src={sameOriginAssetUrl(pa.thumbnail) ?? ''} alt="" class="h-full w-full object-cover" loading="lazy" decoding="async" />
+											{:else}
+												<Image size={16} class="text-slate-400 stroke-[1.5]" />
+											{/if}
+										</div>
+										<div class="min-w-0">
+											<p class="line-clamp-2 text-[12px] font-semibold leading-snug text-slate-800" title={pa.title}>{pa.title}</p>
+											<p class="mt-0.5 truncate text-[10.5px] text-slate-500">{pa.media_name}</p>
+										</div>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+				</section>
+			{/if}
+
 			{#if wbVisible && wb}
 				<div
 					class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[5px] border px-3.5 py-2.5 text-xs shadow-2xs {wbActive ? 'border-blue-200/80 bg-blue-50/80 text-blue-800' : wb.failed > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}"
@@ -2410,7 +2484,15 @@
 					{#if wbActive}
 						<span class="text-[11px] opacity-80">{tr('Boleh ditinggal. Kami kabari lewat notifikasi saat selesai.')}</span>
 					{:else}
-						<button class="app-btn app-btn-soft ml-auto !min-h-7 !px-2.5 !text-[11px]" type="button" onclick={() => (wbDismissed = wb!.id)}>{tr('Tutup')}</button>
+						<span class="ml-auto flex items-center gap-2">
+							{#if wb.failed > 0}
+								<button class="app-btn app-btn-primary !min-h-7 !px-2.5 !text-[11px]" type="button" disabled={wbRetryBusy || viewOnly} onclick={() => void retryWb()}>
+									{#if wbRetryBusy}<LoaderCircle size={12} class="animate-spin" />{/if}
+									{tr('Coba lagi yang gagal')} ({wb.failed})
+								</button>
+							{/if}
+							<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-[11px]" type="button" onclick={() => (wbDismissed = wb!.id)}>{tr('Tutup')}</button>
+						</span>
 					{/if}
 				</div>
 			{/if}

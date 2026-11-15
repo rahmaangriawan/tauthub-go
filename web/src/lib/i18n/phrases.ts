@@ -6228,6 +6228,15 @@ export const PHRASE_EN: Record<string, string> = {
   "Naskah yang sudah ada ikut terhapus dan tidak bisa dikembalikan. Artikel yang sudah terbit atau terjadwal dilewati.": "Existing drafts are deleted too and cannot be restored. Published or scheduled articles are skipped.",
   "Ya, Hapus": "Yes, delete",
   "Artikel untuk media lain": "Articles for other media",
+  "Gagal mengulang antrean.": "Failed to retry the queue.",
+  "Coba lagi yang gagal": "Retry the failed ones",
+  "Artikel kampanye sebelumnya": "Previous campaign articles",
+  "Hanya untuk rujukan. Artikel ini tidak ikut ke kampanye baru.": "For reference only. These articles do not carry over to the new campaign.",
+  "Mau pesan lagi?": "Want to order again?",
+  "Ulangi kampanye ini dengan media yang sama. Artikel lama tampil sebagai rujukan di kampanye baru.": "Repeat this campaign with the same media. The old articles appear as a reference in the new campaign.",
+  "Link hidup": "Live links",
+  "Rata-rata DA media": "Average media DA",
+  "Buka laporan": "Open report",
 	};
 
 /**

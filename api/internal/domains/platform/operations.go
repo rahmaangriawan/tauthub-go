@@ -19,6 +19,7 @@ import (
 
 	"github.com/rahmaangriawan/tauthub-go/internal/auth"
 	"github.com/rahmaangriawan/tauthub-go/internal/db"
+	"github.com/rahmaangriawan/tauthub-go/internal/email"
 	brandflow "github.com/rahmaangriawan/tauthub-go/internal/domains/brandflow"
 	emailqueue "github.com/rahmaangriawan/tauthub-go/internal/email"
 )
@@ -130,11 +131,18 @@ func (d *Deps) OperationsSummary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Bounce email 24 jam: peringatan bila mencapai ambang (sweeper scheduler
+	// mengirim notifikasi yang sama sekali per hari).
+	bounces24h := d.opCount(ctx, "SELECT COUNT(*) AS count FROM email_suppressions WHERE created_at >= $1", day)
+	if bounces24h >= email.BounceSpikeThreshold {
+		alerts = append(alerts, fmt.Sprintf("Bounce email %d dalam 24 jam, melewati ambang %d — lihat Alamat Email Mati", bounces24h, email.BounceSpikeThreshold))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"generation_disabled": disabled, "provider": provider, "provider_configured": configured,
 		"circuit": "closed", "calls_24h": calls24h, "failed_calls_24h": failed24h,
 		"tokens_30d": tokens30d, "running_batches": runningBatches, "dead_letter_items": deadLetterItems,
-		"alerts": alerts, "ecosystem": ecosystem,
+		"alerts": alerts, "bounces_24h": bounces24h, "bounce_threshold": email.BounceSpikeThreshold, "ecosystem": ecosystem,
 		"recent_publications": recentPublications, "recent_agent_runs": recentAgentRuns,
 	})
 }

@@ -87,11 +87,11 @@ func (d *Deps) TautCampaignDuplicate(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO campaigns (id, brand_id, name, created_by, status,
 		   business_profile, hyperlink_config, media_type, trigger_keywords,
 		   budget_strategy, budget_config, strategy_brief, starts_at,
-		   taut_status, taut_entry_mode, profiler_id, profiler_snapshot, created_at, updated_at)
+		   taut_status, taut_entry_mode, profiler_id, profiler_snapshot, duplicated_from_campaign_id, created_at, updated_at)
 		SELECT $1::varchar, c.brand_id, $3::varchar, $4::varchar, 'active',
 		       c.business_profile, c.hyperlink_config, c.media_type, c.trigger_keywords,
 		       c.budget_strategy, c.budget_config, c.strategy_brief, $5::timestamptz,
-		       $6::varchar, c.taut_entry_mode, c.profiler_id, c.profiler_snapshot, NOW(), NOW()
+		       $6::varchar, c.taut_entry_mode, c.profiler_id, c.profiler_snapshot, c.id, NOW(), NOW()
 		FROM campaigns c WHERE c.id = $2 AND c.brand_id = $7
 		RETURNING public_id`,
 		newID, sourceID, newName, user.ID, time.Now(), status, brandID)
@@ -123,5 +123,71 @@ func (d *Deps) TautCampaignDuplicate(w http.ResponseWriter, r *http.Request) {
 		"source_id":   sourceID,
 		"media":       added,
 		"unavailable": unavailable,
+	})
+}
+
+// TautPreviousArticles: GET /v1/brands/{brandId}/taut/campaigns/{campaignId}/previous-articles
+//
+// Artikel kampanye asal ("Ulangi kampanye") sebagai rujukan BACA-SAJA di Dapur
+// Produksi kampanye baru: hanya judul, thumbnail, dan nama media. Tanpa isi
+// artikel. Kosong bila kampanye ini bukan hasil duplikat, atau kampanye asalnya
+// sudah dihapus atau bukan milik brand yang sama.
+func (d *Deps) TautPreviousArticles(w http.ResponseWriter, r *http.Request) {
+	user := httpx.AuthUserFromCtx(r)
+	if user == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Invalid or expired access token")
+		return
+	}
+	brandID, err := d.brandID(r, user.ID, "viewer")
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	ctx := r.Context()
+	empty := map[string]any{"campaign": nil, "items": []any{}}
+	cur, err := d.queryRow(ctx,
+		`SELECT duplicated_from_campaign_id FROM campaigns WHERE id = $1 AND brand_id = $2 AND deleted_at IS NULL LIMIT 1`,
+		chiParam(r, "campaignId"), brandID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if cur == nil || !cur.has("duplicated_from_campaign_id") {
+		writeJSON(w, http.StatusOK, empty)
+		return
+	}
+	srcID := strings.TrimSpace(cur.strOr("duplicated_from_campaign_id", ""))
+	src, err := d.queryRow(ctx,
+		`SELECT id, name FROM campaigns WHERE id = $1 AND brand_id = $2 AND deleted_at IS NULL LIMIT 1`, srcID, brandID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	if src == nil {
+		writeJSON(w, http.StatusOK, empty)
+		return
+	}
+	rows, err := d.queryRows(ctx, `
+		SELECT tcm.media_id, tcm.slot, m.name AS media_name, cd.title, tcm.featured_image_url
+		FROM taut_campaign_media tcm
+		JOIN media m ON m.id = tcm.media_id
+		JOIN content_documents cd ON cd.id = tcm.article_document_id
+		WHERE tcm.campaign_id = $1 AND tcm.status = 'selected' AND tcm.article_document_id IS NOT NULL
+		ORDER BY m.name, tcm.slot LIMIT 100`, srcID)
+	if err != nil {
+		d.writeErr(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(rows))
+	for _, it := range rows {
+		items = append(items, map[string]any{
+			"media_id": it.strOr("media_id", ""), "slot": it.intOr("slot", 1),
+			"media_name": it.strOr("media_name", ""), "title": it.strOr("title", ""),
+			"thumbnail": it.raw("featured_image_url"),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"campaign": map[string]any{"id": srcID, "name": src.strOr("name", "")},
+		"items":    items,
 	})
 }

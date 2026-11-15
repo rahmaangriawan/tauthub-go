@@ -172,7 +172,9 @@ Ke **Arsip**. Dari sana Anda bisa memulihkannya atau menghapusnya permanen.
 
 ## Mengulangi kampanye
 
-Klik ikon **Ulangi kampanye** untuk membuat kampanye draf baru dari kampanye lama. Yang disalin: media yang sama (satu artikel per media), Profiler, ringkasan strategi, dan pengaturan tautan. Yang tidak disalin: artikel, jadwal, dan pesanan. Nama kampanye baru memakai nama lama ditambah "(ulang)".
+Klik ikon **Ulangi kampanye** untuk membuat kampanye draf baru dari kampanye lama. Yang disalin: media yang sama (satu artikel per media), Profiler, ringkasan strategi, dan pengaturan tautan. Yang tidak disalin: artikel, jadwal, dan pesanan. Nama kampanye baru memakai nama lama ditambah "(ulang)". Tombol **Ulangi kampanye** juga ada di halaman **Ringkasan Distribusi** kampanye yang sudah selesai.
+
+Di **Penyedia Konten** kampanye baru, panel **Artikel kampanye sebelumnya** menampilkan artikel kampanye lama sebagai rujukan baca-saja: thumbnail, judul, dan nama media. Panel ini hanya untuk melihat. Artikelnya tidak ikut ke kampanye baru dan tidak bisa diubah dari sana. Panel tidak muncul bila kampanyenya bukan hasil mengulang. Untuk membuat versi baru dari artikel yang sudah ada, pakai **Pakai artikel untuk media lain** di [Penyedia Konten](03-penyedia-konten.md).
 
 - Saldo tidak terpakai saat Anda mengulang. Biaya baru dihitung saat Anda menyusun topik dan mendistribusikan, dengan harga media hari ini. Harga, biaya layanan, dan kurs bisa sudah berubah sejak kampanye pertama.
 - Media yang sekarang tidak bisa dipesan (nonaktif, disembunyikan mitra, belum tersambung, atau tanpa harga) dilewati. Layar memberi tahu berapa media yang dilewati.

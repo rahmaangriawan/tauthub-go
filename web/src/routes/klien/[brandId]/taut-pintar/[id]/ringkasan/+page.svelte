@@ -14,6 +14,7 @@
 	import { page } from '$app/state';
 	import { ArrowRight, CalendarClock, Check, CircleCheck, ClipboardList, Clock, Database, ExternalLink, Eye, FileText, Info, Link as LinkIcon, Loader, LoaderCircle, Lock, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, Send, Star, X } from '@lucide/svelte';
 	import { getBrandUrlId } from '$lib/brand-url.svelte';
+	import { campaignUrlId } from '$lib/campaign-url';
 	import { apiRequest, readApiError, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import AgentSteps from '../../_agent-steps.svelte';
 	import Tooltip from '$lib/components/tooltip.svelte';
@@ -84,6 +85,28 @@
 
 	let data = $state<AuditsData | null>(null);
 	let campaignName = $state('');
+	let repeatBusy = $state(false);
+	let repeatError = $state('');
+	// Ulangi kampanye: draf baru dengan media yang sama, artikel lama tampil
+	// sebagai rujukan baca-saja di Penyedia Konten kampanye baru.
+	async function repeatCampaign() {
+		if (repeatBusy) return;
+		repeatBusy = true;
+		repeatError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/duplicate`, { method: 'POST' });
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal mengulangi kampanye.')));
+			const created = await res.json();
+			if (Array.isArray(created.unavailable) && created.unavailable.length > 0) {
+				window.alert(`${created.unavailable.length} ${tr('media dilewati karena sekarang tidak bisa dipesan.')}`);
+			}
+			await goto(`/klien/${brandUrl}/taut-pintar/${campaignUrlId(created)}`);
+		} catch (reason) {
+			repeatError = reason instanceof Error ? reason.message : String(reason);
+		} finally {
+			repeatBusy = false;
+		}
+	}
 	let error = $state('');
 	let manualFlow = $state(false);
 	let loading = $state(true);
@@ -564,6 +587,19 @@
 		lockedSteps={done ? [1, 2] : []}
 		lockedReason={tr('Kampanye sudah selesai — mode lihat saja.')}
 	/>
+
+	{#if !loading && data && (done || bannerState === 'published')}
+		<div class="app-card mt-4 flex flex-wrap items-center justify-between gap-3 p-4">
+			<div class="min-w-0">
+				<p class="text-sm font-bold">{tr('Mau pesan lagi?')}</p>
+				<p class="mt-0.5 text-xs text-muted-foreground">{tr('Ulangi kampanye ini dengan media yang sama. Artikel lama tampil sebagai rujukan di kampanye baru.')}</p>
+				{#if repeatError}<p class="mt-1 text-xs" style="color: var(--destructive);">{repeatError}</p>{/if}
+			</div>
+			<button class="app-btn app-btn-primary" type="button" disabled={repeatBusy} onclick={() => void repeatCampaign()}>
+				{#if repeatBusy}<LoaderCircle size={14} class="animate-spin" />{/if} {tr('Ulangi kampanye')}
+			</button>
+		</div>
+	{/if}
 
 	{#if loading}
 		<div class="app-card mt-4 flex items-center justify-between gap-3 p-4">
