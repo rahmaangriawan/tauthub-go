@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Artikel turunan ("Pakai untuk media lain"): artikel baru untuk media lain
+// Artikel turunan ("Pakai artikel untuk media lain"): artikel baru untuk media lain
 // dalam kampanye yang sama, dengan topik, sudut, gaya, dan fakta yang sama dengan
 // artikel asal, tetapi kalimat dan strukturnya berbeda supaya tidak dianggap
 // konten duplikat oleh mitra.

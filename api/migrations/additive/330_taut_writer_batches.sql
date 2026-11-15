@@ -1,5 +1,5 @@
 -- 330 — Antrean penulisan Dapur Produksi (Taut Pintar): batch artikel, cover,
--- dan artikel turunan "Pakai untuk media lain". Satu job per artikel; job yang
+-- dan artikel turunan "Pakai artikel untuk media lain". Satu job per artikel; job yang
 -- selesai mengantre job berikutnya, jadi antrean umum tidak tertahan oleh batch
 -- besar. Kolom turunan di taut_campaign_media menyimpan asal artikel, skor
 -- kemiripan, dan teks rujukan fakta untuk Gatekeeper. Tipe notifikasi baru

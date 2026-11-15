@@ -124,7 +124,7 @@ Klik **Buat semua cover** di banner (muncul bila ada artikel tanpa cover), atau 
 
 ### Cara memakai artikel untuk media lain
 
-Pada artikel yang sudah ada isinya, klik ikon **Pakai untuk media lain**. Pilih media tujuan yang masih kosong di panel, lalu **Jalankan**.
+Pada artikel yang sudah ada isinya, klik ikon **Pakai artikel untuk media lain**. Pilih media tujuan yang masih kosong di panel, lalu **Jalankan**.
 
 - Tauthub menulis artikel baru untuk tiap media dengan **topik, sudut, gaya, brief, dan fakta yang sama** dengan artikel asal, tetapi kalimat dan susunannya berbeda, supaya tidak dianggap konten duplikat.
 - Fakta, angka, nama, dan kutipan tidak berubah. Judul, pembuka, urutan, dan kalimat ditulis ulang.

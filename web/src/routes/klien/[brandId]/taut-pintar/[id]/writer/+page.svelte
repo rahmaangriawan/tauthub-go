@@ -2755,12 +2755,12 @@
 													<button
 														type="button"
 														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
-														aria-label={tr('Pakai untuk media lain')}
+														aria-label={tr('Pakai artikel untuk media lain')}
 														disabled={wbActive || viewOnly}
 														onclick={() => void openWb('derived', item)}
 												>
 														<Images size={15} strokeWidth={2} class="shrink-0" />
-														<span class="expTip">{tr('Pakai untuk media lain')}</span>
+														<span class="expTip">{tr('Pakai artikel untuk media lain')}</span>
 													</button>
 													<button
 														type="button"
@@ -3597,7 +3597,7 @@
 				<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
 					<div>
 						<h3 class="text-sm font-bold">
-							{wbPanel.kind === 'article' ? tr('Generate artikel') : wbPanel.kind === 'cover' ? tr('Buat cover') : tr('Pakai untuk media lain')}
+							{wbPanel.kind === 'article' ? tr('Generate artikel') : wbPanel.kind === 'cover' ? tr('Buat cover') : tr('Pakai artikel untuk media lain')}
 						</h3>
 						<p class="mt-0.5 text-xs text-muted-foreground">
 							{#if wbPanel.kind === 'derived' && wbPanel.source}

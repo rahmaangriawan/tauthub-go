@@ -55,7 +55,7 @@ const (
 )
 
 // writerCreditCost: tarif kredit per artikel dari platform_settings.
-// derivativeCreditCost: tarif artikel turunan ("Pakai untuk media lain"),
+// derivativeCreditCost: tarif artikel turunan ("Pakai artikel untuk media lain"),
 // setelan yang sama dengan yang dipakai penagihan di brandflow.
 func (d *Deps) derivativeCreditCost(ctx context.Context) int {
 	row, err := d.queryRow(ctx, "SELECT value FROM platform_settings WHERE key = $1 LIMIT 1", "writer_derivative_credit_cost")

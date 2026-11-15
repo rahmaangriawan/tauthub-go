@@ -6198,7 +6198,7 @@ export const PHRASE_EN: Record<string, string> = {
   "media lain": "another media",
   "Mirip artikel asal": "Similar to source",
   "Isinya masih mirip dengan artikel asal. Sebaiknya edit sebelum terbit.": "It is still similar to the source article. Edit it before publishing.",
-  "Pakai untuk media lain": "Use for other media",
+  "Pakai artikel untuk media lain": "Use for other media",
   "Generate artikel untuk media yang dicentang": "Generate articles for the ticked media",
   "Generate artikel untuk semua media yang belum punya artikel": "Generate articles for all media without an article",
   "Generate terpilih": "Generate selected",
