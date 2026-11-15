@@ -2,10 +2,9 @@
 
 Bonus menambah saldo tanpa mengubah jumlah yang dibayar.
 
-## Dua sumber bonus
+## Kode promo
 
-- **Paket berbonus.** Admin menambah bonus pada paket top up. Memilih paket itu menambah bonus saldo saat pembayaran lunas.
-- **Kode promo.** Di jendela Top Up, pilih **Punya kode promo?**, isi kode, lalu **Pakai**. Bonus tampil di ringkasan tagihan sebelum Anda membayar.
+Di jendela Top Up, pilih **Punya kode promo?**, isi kode, lalu **Pakai**. Bonus tampil di ringkasan tagihan sebelum Anda membayar.
 
 ## Aturan kode promo
 

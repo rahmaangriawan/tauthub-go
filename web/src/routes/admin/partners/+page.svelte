@@ -8,7 +8,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import {
-		ArrowUpRight, Check, Copy, Download, Ellipsis, FileText, Image as ImageIcon,
+		ArrowUpRight, Check, Copy, Download, Ellipsis, Mail, FileText, Image as ImageIcon,
 		MessageCircle, MessageSquare, Newspaper, Search, ShieldCheck, Trash, TriangleAlert, UsersRound
 	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/admin/page-header.svelte';
@@ -42,7 +42,7 @@
 		website_url: string | null; price: number | null; credit_cost: number | null;
 		status: string; integration_type: string; media_tier: string | null;
 		pricing_type: string | null; price_status: string | null;
-		negotiated_price: number | null; dewan_pers_verified?: boolean;
+		negotiated_price: number | null; dewan_pers_verified?: boolean; website_platform?: string | null;
 	};
 
 	const PARTNER_PAGE_SIZE = 20;
@@ -540,6 +540,22 @@
 		mediaLoading = false;
 	}
 
+	const PLATFORM_LABEL: Record<string, string> = { wordpress: 'WordPress', blogger: 'Blogger', custom: 'Web Custom', web_custom: 'Web Custom', manual: 'Manual' };
+	function platformOf(m: PartnerMedia) {
+		const raw = (m.website_platform ?? '').trim();
+		if (!raw) return tr('Platform belum diisi');
+		return PLATFORM_LABEL[raw.toLowerCase()] ?? raw;
+	}
+	const PRICE_TONE: Record<string, 'success' | 'warning' | 'danger' | 'accent' | 'neutral'> = {
+		disetujui: 'success', final: 'success', menunggu_review: 'warning', negosiasi: 'accent', ditolak: 'danger'
+	};
+	const MEDIA_TONE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
+		active: 'success', pending_review: 'warning', draft: 'neutral', inactive: 'danger', rejected: 'danger', archived: 'neutral', hidden: 'neutral'
+	};
+	let faviconFailed = $state<Record<string, boolean>>({});
+	const mediaActive = $derived(partnerMedia.filter((m) => m.status === 'active').length);
+	const mediaApproved = $derived(partnerMedia.filter((m) => m.price_status === 'disetujui' || m.price_status === 'final').length);
+
 	/** Domain telanjang dari URL media — tanpa skema, www, dan garis miring akhir. */
 	function domainOf(m: PartnerMedia) {
 		return (m.website_url ?? '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
@@ -627,19 +643,18 @@
 		title="Partners"
 		description={tr("Mitra media (1 akun user = 1 partner). Media milik partner aktif melewati gate persetujuan pada publikasi. Verifikasi Dewan Pers dinilai per domain/media, bukan per akun.")}
 	>
-		<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--accent); color: var(--accent-foreground);">{fmtNum(total)} partner</span>
+		<span class="self-center text-xs tabular-nums text-muted-foreground">{fmtNum(total)} partner</span>
 		<button class="app-btn app-btn-primary" type="button" onclick={() => (createOpen = true)}><UsersRound size={16} />{tr("Tambah partner")}</button>
 	</PageHeader>
 
 	<!-- Tab khusus: mitra yang mengajukan Secure Direct dan masih menunggu ACC. -->
-	<div class="mt-4 flex flex-wrap items-center gap-1 rounded-lg border p-1" style="border-color: var(--border); background: var(--card); width: fit-content;" role="tablist" aria-label={tr('Kelompok mitra')}>
+	<div class="seg mt-6" role="tablist" aria-label={tr('Kelompok mitra')}>
 		<button
 			type="button"
 			role="tab"
 			aria-selected={sdTab === 'all'}
-			class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {sdTab === 'all' ? 'text-white' : 'text-muted-foreground hover:bg-secondary'}"
-			style={sdTab === 'all' ? 'background-color: var(--primary);' : ''}
-			onclick={() => setSdTab('all')}
+			class="seg-btn"
+						onclick={() => setSdTab('all')}
 		>
 			{tr('Semua mitra')}
 		</button>
@@ -648,19 +663,18 @@
 			id="secure-direct"
 			role="tab"
 			aria-selected={sdTab === 'pending'}
-			class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {sdTab === 'pending' ? 'text-white' : 'text-muted-foreground hover:bg-secondary'}"
-			style={sdTab === 'pending' ? 'background-color: var(--primary);' : ''}
-			onclick={() => setSdTab('pending')}
+			class="seg-btn"
+						onclick={() => setSdTab('pending')}
 		>
-			<ShieldCheck size={13} />
+			<ShieldCheck size={14} strokeWidth={1.5} />
 			{tr('Pengajuan Secure Direct')}
 			{#if sdPendingTotal > 0}
-				<span class="rounded-full px-1.5 text-[10.5px] font-bold {sdTab === 'pending' ? 'bg-white/20 text-white' : 'bg-secondary text-muted-foreground'}">{sdPendingTotal}</span>
+				<span class="seg-count">{sdPendingTotal}</span>
 			{/if}
 		</button>
 	</div>
 
-	<div class="mt-3 flex flex-wrap items-center gap-2">
+	<div class="mt-4 flex flex-wrap items-center gap-2">
 		<label class="app-input flex min-w-[220px] flex-1 items-center gap-2 !py-1.5">
 			<Search size={15} class="text-muted-foreground" />
 			<input class="w-full bg-transparent text-sm outline-none" placeholder={tr("Cari nama, email, atau nomor WA…")} aria-label={tr("Cari partner")} value={search} oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)} />
@@ -727,7 +741,7 @@
 		{/if}
 		<span class="flex-1"></span>
 		<button class="app-btn app-btn-soft" type="button" disabled={exporting} onclick={() => void exportCsv()}>
-			{exporting ? 'Mengekspor…' : 'Ekspor kontak (CSV)'}
+			<Download size={14} strokeWidth={1.5} />{exporting ? 'Mengekspor…' : 'Ekspor kontak (CSV)'}
 		</button>
 	</div>
 
@@ -739,36 +753,32 @@
 		<Feedback {loading} {error} notice={chatNotice || waNotice} loadingText="Memuat partner…" />
 
 		<div class="app-card mt-4 overflow-x-auto">
-			<table class="w-full text-sm" style="min-width: 1400px;">
+			<table class="ptable w-full text-sm">
 				<thead>
-					<tr class="text-left text-xs text-muted-foreground">
-						<th class="px-4 py-2.5 font-medium min-w-[210px]">Partner</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Email")}</th>
-						<th class="px-4 py-2.5 font-medium">WA</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Email Alternatif")}</th>
-						<th class="px-4 py-2.5 font-medium">{tr("Harga Media")}</th>
-						<th class="px-4 py-2.5 font-medium min-w-[220px]">{tr("Media")}</th>
-						<th class="px-4 py-2.5 font-medium">Dewan Pers</th>
-						<th class="px-4 py-2.5 font-medium">VIP</th>
-						<th class="px-4 py-2.5 font-medium">Status</th>
-						<th class="px-4 py-2.5 font-medium">Aksi</th>
+					<tr>
+						<th class="min-w-[240px]">Partner</th>
+						<th class="min-w-[240px]">{tr("Kontak")}</th>
+						<th>{tr("Media")}</th>
+						<th>Dewan Pers</th>
+						<th>VIP</th>
+						<th>Status</th>
+						<th class="w-[88px] text-right"><span class="sr-only">Aksi</span></th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each rows as row (row.id)}
-						<tr class="border-t">
-							<td class="px-4 py-3">
-								<div class="flex items-center gap-2">
-									<UsersRound size={16} class="shrink-0 text-muted-foreground" />
-									<div>
+						<tr>
+							<td>
+								<div class="flex items-center gap-3">
+									<span class="avatar" aria-hidden="true">{(row.name ?? row.email).trim().charAt(0).toUpperCase()}</span>
+									<div class="min-w-0">
 										{#if row.secure_direct_status === 'pending'}
 											<Tooltip content={tr('Mengajukan Secure Direct — gunakan menu titik-tiga untuk mengaktifkan Secure Direct.')}>
 												<Badge label={tr('Pengajuan Secure Direct')} tone="warning" />
 											</Tooltip>
 										{/if}
-										<p class="font-medium">{row.name ?? row.email}</p>
+										<p class="truncate font-medium">{row.name ?? row.email}</p>
 										<p class="mt-0.5 flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground" title={tr('ID mitra ini bisa dicari di katalog media.')}>
-											<span>{tr('ID')}:</span>
 											<code class="font-mono">{row.id.slice(0, 8)}</code>
 											<button
 												class="rounded p-0.5 hover:bg-secondary"
@@ -777,55 +787,32 @@
 												aria-label={tr('Salin ID mitra')}
 												onclick={(e) => { e.stopPropagation(); void copyContact(`pid-${row.id}`, row.id.slice(0, 8)); }}
 											>
-												{#if copyFeedback?.key === `pid-${row.id}` && copyFeedback?.ok}<Check size={12} style="color: var(--success);" />{:else}<Copy size={12} />{/if}
+												{#if copyFeedback?.key === `pid-${row.id}` && copyFeedback?.ok}<Check size={12} strokeWidth={1.5} style="color: var(--success);" />{:else}<Copy size={12} strokeWidth={1.5} />{/if}
 											</button>
+											<span aria-hidden="true">·</span>
+											<Tooltip content={tr('Tanggal mitra bergabung ke platform Tauthub.')}>
+												<span>{tr('Bergabung')} {fmtDate(row.created_at)}</span>
+											</Tooltip>
 										</p>
 									</div>
 								</div>
 							</td>
-							<td class="whitespace-nowrap px-4 py-3">
-								<a style="color: var(--primary);" href={`mailto:${row.email}`}>{row.email}</a>
-								<div class="mt-0.5">
-									<Tooltip content={tr('Tanggal mitra bergabung ke platform Tauthub.')}>
-										<span class="text-xs text-muted-foreground">{tr('Bergabung')} {fmtDate(row.created_at)}</span>
-									</Tooltip>
+							<td>
+								<div class="flex flex-col gap-1">
+									<a class="truncate" style="color: var(--primary);" href={`mailto:${row.email}`}>{row.email}</a>
+									{#if row.wa_number}
+										<span class="flex flex-wrap items-center gap-2 text-xs">
+											<a style="color: var(--primary);" href={`https://wa.me/${row.wa_number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">{row.wa_number}</a>
+											{#if !row.wa_consent}<Badge label="tanpa izin WA" tone="neutral" />{/if}
+										</span>
+									{:else if (row.media_count ?? 0) > 2}
+										<span class="flex items-center gap-2 text-xs text-muted-foreground">WA — <Badge label={tr('WA belum diisi')} tone="warning" /></span>
+									{/if}
+									{#if row.email_alt1}<span class="truncate text-xs text-muted-foreground">{row.email_alt1}</span>{/if}
+									{#if row.email_alt2}<span class="truncate text-xs text-muted-foreground">{row.email_alt2}</span>{/if}
 								</div>
 							</td>
-							<td class="px-4 py-3">
-								{#if row.wa_number}
-									<div class="flex flex-col gap-1">
-										<a style="color: var(--primary);" href={`https://wa.me/${row.wa_number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">{row.wa_number}</a>
-										{#if !row.wa_consent}<Badge label="tanpa izin WA" tone="neutral" />{/if}
-										</div>
-							{:else}
-										<span class="text-xs text-muted-foreground">—</span>
-										{#if (row.media_count ?? 0) > 2}
-											<Badge label={tr('WA belum diisi')} tone="warning" />
-										{/if}
-							{/if}
-							</td>
-							<td class="px-4 py-3">
-								{#if row.email_alt1 || row.email_alt2}
-									<div class="flex flex-col gap-1 text-xs">
-										{#if row.email_alt1}<span>{row.email_alt1}</span>{/if}
-										{#if row.email_alt2}<span>{row.email_alt2}</span>{/if}
-									</div>
-								{:else}
-									<span class="text-xs text-muted-foreground">—</span>
-								{/if}
-							</td>
-							<td class="px-4 py-3">
-								{#if row.price_min != null || row.price_max != null}
-									<span class="whitespace-nowrap text-xs">
-										{row.price_min === row.price_max
-											? idr(row.price_min ?? 0)
-											: `${idr(row.price_min ?? 0)} – ${idr(row.price_max ?? 0)}`}
-									</span>
-								{:else}
-									<span class="text-xs text-muted-foreground">—</span>
-								{/if}
-							</td>
-							<td class="px-4 py-3">
+							<td>
 								{#if row.media_count > 0}
 									<button class="app-btn app-btn-soft !min-h-7 !px-2.5 !text-xs" type="button" title={tr("Lihat media & pengajuan harganya")} onclick={() => void openMedia(row)}>
 										{row.media_count} media
@@ -833,8 +820,15 @@
 								{:else}
 									<span class="text-xs text-muted-foreground">—</span>
 								{/if}
+								{#if row.price_min != null || row.price_max != null}
+									<p class="mt-1 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+										{row.price_min === row.price_max
+											? idr(row.price_min ?? 0)
+											: `${idr(row.price_min ?? 0)} – ${idr(row.price_max ?? 0)}`}
+									</p>
+								{/if}
 							</td>
-							<td class="px-4 py-3">
+							<td>
 								{#if row.document_count === 0}
 									<Badge label={tr("Belum upload")} tone="neutral" />
 								{:else}
@@ -844,7 +838,7 @@
 									/>
 								{/if}
 							</td>
-							<td class="px-4 py-3">
+							<td>
 								{#if row.is_vip}
 									<div class="flex flex-col items-start gap-1">
 										<Badge label={row.vip_tier === 'vip_reguler' ? 'VIP Reguler' : 'VVIP'} tone="accent" />
@@ -852,20 +846,20 @@
 										{#if row.vip_expires_at}<span class="text-xs text-muted-foreground">Sampai {fmtDate(row.vip_expires_at)}</span>{/if}
 									</div>
 								{:else}
-									<Badge label="-" tone="neutral" />
+									<span class="text-xs text-muted-foreground">—</span>
 								{/if}
 							</td>
-							<td class="px-4 py-3"><Badge label={row.status === 'active' ? tr('Aktif') : tr('Suspend')} tone={row.status === 'active' ? 'success' : 'danger'} /></td>
-							<td class="px-4 py-3 whitespace-nowrap">
+							<td><Badge label={row.status === 'active' ? tr('Aktif') : tr('Suspend')} tone={row.status === 'active' ? 'success' : 'danger'} /></td>
+							<td class="whitespace-nowrap text-right">
 								<button
-									class="rounded-lg p-1.5 hover:bg-secondary"
+									class="icon-btn"
 									type="button"
 									aria-label={`${tr('Chat')} ${row.name ?? row.email}`}
 									title={tr('Kirim pesan ke mitra lewat tiket dukungan.')}
 									onclick={() => openChat(row)}
-								><MessageSquare size={17} /></button>
+								><MessageSquare size={16} strokeWidth={1.5} /></button>
 								<button
-									class="relative rounded-lg p-1.5 hover:bg-secondary"
+									class="icon-btn relative"
 									type="button"
 									aria-label={`Aksi untuk ${row.name ?? row.email}`}
 									title={row.secure_direct_status === 'pending' ? tr('Ada pengajuan Secure Direct') : undefined}
@@ -874,50 +868,45 @@
 										menuPos = { top: rect.bottom + 4, right: window.innerWidth - rect.right };
 										openMenu = openMenu === row.id ? null : row.id;
 									}}
-								><Ellipsis size={19} />{#if row.secure_direct_status === 'pending'}<span class="absolute right-0.5 top-0.5 size-2.5 rounded-full border-2 border-white" style="background: var(--destructive);" aria-hidden="true"></span>{/if}</button>
+								><Ellipsis size={16} strokeWidth={1.5} />{#if row.secure_direct_status === 'pending'}<span class="absolute right-1 top-1 size-2 rounded-full" style="background: var(--destructive);" aria-hidden="true"></span>{/if}</button>
 								{#if openMenu === row.id}
 									<div class="fixed inset-0 z-40" role="presentation" onclick={() => (openMenu = null)}></div>
 									<div
-										class="app-card fixed z-50 min-w-[230px] p-1.5 text-sm shadow-md"
+										class="app-card menu fixed z-50 min-w-[230px] p-1.5 text-left"
 										style="top: {menuPos.top}px; right: {menuPos.right}px;"
 									>
-											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openDocs(row); }}>
-												<ShieldCheck size={14} /> Dokumen
+										<button class="menu-item" type="button" onclick={() => { openMenu = null; void openDocs(row); }}>
+											<ShieldCheck size={14} strokeWidth={1.5} /> Dokumen
+										</button>
+										{#if (row.media_count ?? 0) > 2 && (!row.wa_number || !row.wa_consent)}
+											<button class="menu-item" type="button" onclick={() => { openMenu = null; void sendWaReminder(row); }}>
+												<MessageCircle size={14} strokeWidth={1.5} /> {tr('Kirim pengingat isi WA')}
 											</button>
-											{#if (row.media_count ?? 0) > 2 && (!row.wa_number || !row.wa_consent)}
-												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void sendWaReminder(row); }}>
-													<MessageCircle size={14} /> {tr('Kirim pengingat isi WA')}
-												</button>
-											{/if}
-											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; openRoleDialog(row); }}>
-												<UsersRound size={14} /> {tr('Ubah peran (Klien/Mitra)')}
+										{/if}
+										<button class="menu-item" type="button" onclick={() => { openMenu = null; openRoleDialog(row); }}>
+											<UsersRound size={14} strokeWidth={1.5} /> {tr('Ubah peran (Klien/Mitra)')}
+										</button>
+										<button class="menu-item" type="button" onclick={() => { openMenu = null; void openVipSettings(row); }}>
+											{row.is_vip ? tr('Pengaturan VIP') : 'Jadikan VIP'}
+										</button>
+										{#if !row.is_vip}
+											<button class="menu-item" type="button" onclick={() => { openMenu = null; void setVip(row, true, 'vip_reguler'); }}>
+												Jadikan VIP Reguler (60 hari)
 											</button>
-											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void openVipSettings(row); }}>
-												{row.is_vip ? tr('Pengaturan VIP') : 'Jadikan VIP'}
-											</button>
-											{#if !row.is_vip}
-												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setVip(row, true, 'vip_reguler'); }}>
-													Jadikan VIP Reguler (60 hari)
-												</button>
-											{/if}
-											<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; autoPublishTarget = row; }}>
-												{row.auto_publish_enabled ? 'Cabut Secure Direct' : 'Aktifkan Secure Direct'}
-												{#if row.secure_direct_status === 'pending' && !row.auto_publish_enabled}<span class="ml-auto size-2 rounded-full" style="background: var(--destructive);" aria-hidden="true"></span>{/if}
-											</button>
-											{#if row.status === 'active'}
-												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" style="color: var(--destructive);" onclick={() => { openMenu = null; suspendTarget = row; }}>{tr('Suspend akun')}</button>
-											{:else}
-												<button class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary" type="button" onclick={() => { openMenu = null; void setStatus(row, 'active'); }}>{tr('Aktifkan kembali')}</button>
-											{/if}
-											<div class="my-1 border-t"></div>
-											<button
-												class="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-secondary"
-												style="color: var(--destructive);"
-												type="button"
-												onclick={() => { openMenu = null; deleting = row; }}
-											><Trash size={14} />{tr("Hapus")}</button>
-										</div>
-									{/if}
+										{/if}
+										<button class="menu-item" type="button" onclick={() => { openMenu = null; autoPublishTarget = row; }}>
+											{row.auto_publish_enabled ? 'Cabut Secure Direct' : 'Aktifkan Secure Direct'}
+											{#if row.secure_direct_status === 'pending' && !row.auto_publish_enabled}<span class="ml-auto size-2 rounded-full" style="background: var(--destructive);" aria-hidden="true"></span>{/if}
+										</button>
+										{#if row.status === 'active'}
+											<button class="menu-item menu-danger" type="button" onclick={() => { openMenu = null; suspendTarget = row; }}>{tr('Suspend akun')}</button>
+										{:else}
+											<button class="menu-item" type="button" onclick={() => { openMenu = null; void setStatus(row, 'active'); }}>{tr('Aktifkan kembali')}</button>
+										{/if}
+										<div class="my-1 border-t"></div>
+										<button class="menu-item menu-danger" type="button" onclick={() => { openMenu = null; deleting = row; }}><Trash size={14} strokeWidth={1.5} />{tr("Hapus")}</button>
+									</div>
+								{/if}
 							</td>
 						</tr>
 					{/each}
@@ -925,7 +914,7 @@
 			</table>
 			{#if !loading && rows.length === 0}
 				<div class="flex flex-col items-center px-4 py-12 text-center">
-					<UsersRound size={26} class="text-muted-foreground" />
+					<UsersRound size={24} strokeWidth={1.5} class="text-muted-foreground" />
 					<p class="mt-2 text-sm text-muted-foreground">{tr("Belum ada partner. Tambahkan partner pertama.")}</p>
 				</div>
 			{/if}
@@ -974,65 +963,83 @@
 	</Modal>
 {/if}
 
+<!-- Baris kontak ringkasan mitra. Didefinisikan di luar <Modal> karena snippet
+     di dalam komponen dibaca sebagai properti komponen itu. -->
+	{#snippet contactRow(label: string, key: string, value: string, kind: 'mail' | 'wa')}
+		<li class="ps-row">
+			<span class="ps-label">{label}</span>
+			{#if kind === 'mail'}
+				<a class="ps-value ps-link" href={`mailto:${value}`} title={value}>{value}</a>
+			{:else}
+				<span class="ps-value ps-tabular" title={value}>{value}</span>
+			{/if}
+			<span class="ps-actions">
+				{#if kind === 'wa'}
+					<a
+						class="ps-icon"
+						href={`https://wa.me/${value.replace(/[^0-9]/g, '')}`}
+						target="_blank"
+						rel="noreferrer"
+						aria-label={`Buka chat WhatsApp ${value}`}
+						title={tr("Buka chat WhatsApp")}
+					><ArrowUpRight size={15} /></a>
+				{/if}
+				<button
+					class="ps-icon"
+					type="button"
+					aria-label={kind === 'wa' ? `Salin WhatsApp ${value}` : `Salin email ${value}`}
+					title={kind === 'wa' ? tr('Salin nomor') : tr('Salin email')}
+					onclick={() => void copyContact(key, value)}
+				>
+					{#if copyFeedback?.key === key && copyFeedback?.ok}<Check size={15} style="color: var(--success);" />{:else}<Copy size={15} />{/if}
+				</button>
+			</span>
+		</li>
+	{/snippet}
+
 {#if mediaPartner}
 	<Modal title={`Media mitra — ${mediaPartner.name ?? mediaPartner.email}`} label={tr("Media mitra")} maxWidth="4xl" onClose={() => (mediaPartner = null)}>
 		<p class="text-sm text-muted-foreground">{tr("Media yang terdeteksi milik mitra ini beserta harga yang mereka ajukan.")}</p>
+		<!-- Satu kartu netral: ringkasan di atas, kontak berbaris di bawah. Warna
+		     hanya untuk keadaan (ikon salin berhasil, catatan peringatan), bukan
+		     untuk membedakan kartu atau baris. -->
 
-		{#if mediaPartner.email || mediaPartner.wa_number || mediaPartner.email_alt1 || mediaPartner.email_alt2}
-			<div class="mt-3 flex flex-wrap gap-5 rounded-lg border p-3">
-				{#if mediaPartner.email}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-semibold text-muted-foreground">{tr("Email")}</span>
-						<div class="flex items-center gap-1">
-							<a class="text-xs" style="color: var(--primary);" href={`mailto:${mediaPartner.email}`}>{mediaPartner.email}</a>
-							<button class="rounded p-1 hover:bg-secondary" type="button" aria-label={`Salin email ${mediaPartner.email}`} onclick={() => void copyContact('email', mediaPartner?.email ?? '')}>
-								{#if copyFeedback?.key === 'email' && copyFeedback?.ok}<Check size={14} style="color: var(--success);" />{:else}<Copy size={14} />{/if}
-							</button>
+		{#if (!mediaLoading && partnerMedia.length > 0) || mediaPartner.email || mediaPartner.wa_number || mediaPartner.email_alt1 || mediaPartner.email_alt2}
+			<div class="partner-summary mt-4">
+				{#if !mediaLoading && partnerMedia.length > 0}
+					<div class="ps-stats">
+						<div class="ps-stat">
+							<span class="ps-num">{fmtNum(partnerMedia.length)}</span>
+							<span class="ps-lbl">{tr('Total media')}</span>
+						</div>
+						<div class="ps-stat">
+							<span class="ps-num">{fmtNum(mediaActive)}<small>/ {fmtNum(partnerMedia.length)}</small></span>
+							<span class="ps-lbl">{tr('Aktif')}</span>
+						</div>
+						<div class="ps-stat">
+							<span class="ps-num">{fmtNum(mediaApproved)}<small>/ {fmtNum(partnerMedia.length)}</small></span>
+							<span class="ps-lbl">{tr('Harga disetujui')}</span>
 						</div>
 					</div>
 				{/if}
-				{#if mediaPartner.wa_number}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-semibold text-muted-foreground">WhatsApp</span>
-						<div class="flex items-center gap-2">
-							<span class="text-xs">{mediaPartner.wa_number}</span>
-							<a
-								class="inline-flex h-[22px] w-[22px] items-center justify-center rounded"
-								style="color: var(--primary);"
-								href={`https://wa.me/${mediaPartner.wa_number.replace(/[^0-9]/g, '')}`}
-								target="_blank"
-								rel="noreferrer"
-								aria-label={`Buka chat WhatsApp ${mediaPartner.wa_number}`}
-								title={tr("Buka chat WhatsApp")}
-							><ArrowUpRight size={14} /></a>
-							<button class="rounded p-1 hover:bg-secondary" type="button" aria-label={`Salin WhatsApp ${mediaPartner.wa_number}`} title="Salin nomor" onclick={() => void copyContact('wa', mediaPartner?.wa_number ?? '')}>
-								{#if copyFeedback?.key === 'wa' && copyFeedback?.ok}<Check size={14} style="color: var(--success);" />{:else}<Copy size={14} />{/if}
-							</button>
+
+				{#if mediaPartner.email || mediaPartner.wa_number || mediaPartner.email_alt1 || mediaPartner.email_alt2}
+					<ul class="ps-contacts">
+						{#if mediaPartner.email}{@render contactRow(tr('Email'), 'email', mediaPartner.email, 'mail')}{/if}
+						{#if mediaPartner.wa_number}{@render contactRow('WhatsApp', 'wa', mediaPartner.wa_number, 'wa')}{/if}
+						{#if mediaPartner.email_alt1}{@render contactRow(mediaPartner.email_alt2 ? `${tr('Email alternatif')} 1` : tr('Email alternatif'), 'alt1', mediaPartner.email_alt1, 'mail')}{/if}
+						{#if mediaPartner.email_alt2}{@render contactRow(mediaPartner.email_alt1 ? `${tr('Email alternatif')} 2` : tr('Email alternatif'), 'alt2', mediaPartner.email_alt2, 'mail')}{/if}
+					</ul>
+					{#if (copyFeedback && !copyFeedback?.ok) || (mediaPartner.wa_number && !mediaPartner.wa_consent)}
+						<div class="ps-notes">
+							{#if copyFeedback && !copyFeedback?.ok}
+								<span style="color: var(--warning);">{tr("Gagal menyalin — salin manual dari teks di atas.")}</span>
+							{/if}
+							{#if mediaPartner.wa_number && !mediaPartner.wa_consent}
+								<span>{tr("Mitra belum menyetujui kontak via WhatsApp.")}</span>
+							{/if}
 						</div>
-					</div>
-				{/if}
-				{#if mediaPartner.email_alt1 || mediaPartner.email_alt2}
-					<div class="flex flex-col gap-1">
-						<span class="text-xs font-semibold text-muted-foreground">{tr("Email alternatif")}</span>
-						<div class="flex flex-col gap-1">
-							{#each [['alt1', mediaPartner.email_alt1], ['alt2', mediaPartner.email_alt2]] as [key, value] (key)}
-								{#if value}
-									<div class="flex items-center gap-1">
-										<a class="text-xs" style="color: var(--primary);" href={`mailto:${value}`}>{value}</a>
-										<button class="rounded p-1 hover:bg-secondary" type="button" aria-label={`Salin email alternatif ${value}`} onclick={() => void copyContact(String(key), String(value ?? ''))}>
-											{#if copyFeedback?.key === key && copyFeedback?.ok}<Check size={14} style="color: var(--success);" />{:else}<Copy size={14} />{/if}
-										</button>
-									</div>
-								{/if}
-							{/each}
-						</div>
-					</div>
-				{/if}
-				{#if copyFeedback && !copyFeedback?.ok}
-					<span class="self-center text-xs" style="color: var(--warning);">{tr("Gagal menyalin — salin manual dari teks di atas.")}</span>
-				{/if}
-				{#if mediaPartner.wa_number && !mediaPartner.wa_consent}
-					<span class="self-center text-xs text-muted-foreground">{tr("Mitra belum menyetujui kontak via WhatsApp.")}</span>
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -1048,46 +1055,63 @@
 			</div>
 		{:else}
 			<div class="mt-3 max-h-[420px] overflow-auto">
-				<table class="w-full text-sm" style="min-width: 760px;">
+				<table class="mtable w-full text-sm" style="min-width: 760px;">
 					<thead>
-						<tr class="text-left text-xs text-muted-foreground">
-							<th class="py-2 pr-3 font-medium">{tr("Media")}</th>
-							<th class="py-2 pr-3 font-medium">Kategori</th>
-							<th class="py-2 pr-3 font-medium">{tr("Harga Diajukan")}</th>
-							<th class="py-2 pr-3 font-medium">{tr("Status Harga")}</th>
-							<th class="py-2 font-medium">{tr("Status Media")}</th>
+						<tr>
+							<th>{tr("Media")}</th>
+							<th>Kategori</th>
+							<th>{tr("Harga Diajukan")}</th>
+							<th>{tr("Status Harga")}</th>
+							<th>{tr("Status Media")}</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each mediaPaged as m (m.id)}
-							<tr class="border-t">
-								<td class="py-2 pr-3">
-									<p class="font-medium">{m.name}</p>
-									{#if m.website_url}
-										<div class="flex items-center gap-1">
-											<p class="text-xs text-muted-foreground">{domainOf(m)}</p>
-											<button
-												class="rounded p-0.5 hover:bg-secondary"
-												type="button"
-												title={tr("Salin domain")}
-												aria-label={`Salin domain ${domainOf(m)}`}
-												onclick={() => void copyContact(`dom-${m.id}`, domainOf(m))}
-											>
-												{#if copyFeedback?.key === `dom-${m.id}` && copyFeedback?.ok}<Check size={12} style="color: var(--success);" />{:else}<Copy size={12} />{/if}
-											</button>
+							<tr>
+								<td>
+									<div class="flex items-center gap-3">
+										{#if m.website_url && !faviconFailed[m.id]}
+											<img
+												class="favicon"
+												src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domainOf(m))}&sz=64`}
+												alt=""
+												width="28"
+												height="28"
+												loading="lazy"
+												onerror={() => (faviconFailed = { ...faviconFailed, [m.id]: true })}
+											/>
+										{:else}
+											<span class="favicon favicon-fallback" aria-hidden="true">{(domainOf(m) || m.name).charAt(0).toUpperCase()}</span>
+										{/if}
+										<div class="min-w-0">
+											<div class="flex items-center gap-1">
+												<p class="truncate font-medium" title={m.name}>{domainOf(m) || m.name}</p>
+												{#if m.website_url}
+													<button
+														class="rounded p-0.5 text-muted-foreground hover:bg-secondary"
+														type="button"
+														title={tr("Salin domain")}
+														aria-label={`Salin domain ${domainOf(m)}`}
+														onclick={() => void copyContact(`dom-${m.id}`, domainOf(m))}
+													>
+														{#if copyFeedback?.key === `dom-${m.id}` && copyFeedback?.ok}<Check size={12} strokeWidth={1.5} style="color: var(--success);" />{:else}<Copy size={12} strokeWidth={1.5} />{/if}
+													</button>
+												{/if}
+											</div>
+											<p class="mt-0.5 text-xs text-muted-foreground">{platformOf(m)}</p>
 										</div>
-									{/if}
+									</div>
 								</td>
-								<td class="py-2 pr-3">{m.category ?? '—'}</td>
-								<td class="py-2 pr-3">
-									{m.price != null ? idr(m.price) : '—'}
+								<td>{#if m.category}<Badge label={m.category} tone="accent" />{:else}<span class="text-muted-foreground">—</span>{/if}</td>
+								<td class="whitespace-nowrap tabular-nums">
+									<span class="font-medium">{m.price != null ? idr(m.price) : '—'}</span>
 									{#if m.pricing_type === 'nego'}<span class="text-xs text-muted-foreground"> · nego</span>{/if}
 								</td>
-								<td class="py-2 pr-3">
-									<Badge label={PRICE_STATUS_LABEL[m.price_status ?? ''] ?? m.price_status ?? '—'} tone="neutral" />
+								<td>
+									<Badge label={PRICE_STATUS_LABEL[m.price_status ?? ''] ?? m.price_status ?? '—'} tone={PRICE_TONE[m.price_status ?? ''] ?? 'neutral'} />
 								</td>
-								<td class="py-2">
-									<Badge label={MEDIA_STATUS_LABEL[m.status] ?? m.status} tone="neutral" />
+								<td>
+									<Badge label={MEDIA_STATUS_LABEL[m.status] ?? m.status} tone={MEDIA_TONE[m.status] ?? 'neutral'} />
 								</td>
 							</tr>
 						{/each}
@@ -1475,3 +1499,260 @@
 		{/snippet}
 	</Modal>
 {/if}
+
+<style>
+	/* Popup media mitra */
+	.partner-summary {
+		border-radius: 12px;
+		background-color: var(--card);
+		box-shadow: inset 0 0 0 1px var(--border);
+		overflow: hidden;
+	}
+	.ps-stats {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.ps-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 14px 18px;
+	}
+	.ps-stat + .ps-stat {
+		border-left: 1px solid var(--border);
+	}
+	.ps-num {
+		font-size: 22px;
+		line-height: 28px;
+		font-weight: 500;
+		font-variant-numeric: tabular-nums;
+		color: var(--foreground);
+	}
+	.ps-num small {
+		margin-left: 4px;
+		font-size: 12px;
+		font-weight: 400;
+		color: var(--muted-foreground);
+	}
+	.ps-lbl {
+		font-size: 12px;
+		color: var(--muted-foreground);
+	}
+	/* Kontak dalam dua kolom (email di samping WhatsApp). Satu kontak, atau
+	   kontak ganjil terakhir, mengisi lebar penuh. Label di atas, nilai dan
+	   tombolnya di bawah dan saling menempel. */
+	.ps-contacts {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		border-top: 1px solid var(--border);
+	}
+	.ps-row {
+		display: grid;
+		grid-template-columns: minmax(0, max-content) max-content;
+		justify-content: start;
+		align-items: center;
+		column-gap: 8px;
+		row-gap: 2px;
+		padding: 10px 18px;
+	}
+	.ps-row:nth-child(n + 3) {
+		border-top: 1px solid var(--border);
+	}
+	.ps-row:nth-child(even) {
+		border-left: 1px solid var(--border);
+	}
+	.ps-row:only-child,
+	.ps-row:nth-child(odd):last-child {
+		grid-column: 1 / -1;
+	}
+	.ps-label {
+		grid-column: 1 / -1;
+		font-size: 12px;
+		color: var(--muted-foreground);
+	}
+	.ps-value {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 13px;
+		color: var(--foreground);
+	}
+	.ps-link {
+		color: var(--primary);
+		text-decoration: none;
+	}
+	.ps-link:hover {
+		text-decoration: underline;
+	}
+	.ps-tabular {
+		font-variant-numeric: tabular-nums;
+	}
+	.ps-actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+	.ps-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 30px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--muted-foreground);
+		cursor: pointer;
+		transition: background-color 0.15s ease, color 0.15s ease;
+	}
+	.ps-icon:hover {
+		background-color: var(--secondary);
+		color: var(--foreground);
+	}
+	.ps-icon:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 1px;
+	}
+	.ps-notes {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 8px 18px 10px;
+		border-top: 1px solid var(--border);
+		font-size: 12px;
+		color: var(--muted-foreground);
+	}
+	@media (max-width: 520px) {
+		.ps-stat {
+			padding: 12px;
+		}
+		.ps-contacts {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.ps-row {
+			padding: 8px 12px;
+		}
+		.ps-row:nth-child(n + 2) {
+			border-top: 1px solid var(--border);
+		}
+		.ps-row:nth-child(even) {
+			border-left: 0;
+		}
+		.ps-notes {
+			padding: 8px 12px 10px;
+		}
+	}
+	.mtable { border-collapse: separate; border-spacing: 0; }
+	.mtable th {
+		padding: 10px 12px;
+		text-align: left;
+		font-size: 12px;
+		font-weight: 400;
+		color: var(--muted-foreground);
+		background-color: color-mix(in srgb, var(--foreground) 4%, transparent);
+	}
+	.mtable th:first-child { border-radius: 8px 0 0 8px; }
+	.mtable th:last-child { border-radius: 0 8px 8px 0; }
+	.mtable td { padding: 12px; vertical-align: middle; border-bottom: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent); }
+	.mtable tbody tr:last-child td { border-bottom: 0; }
+	.favicon { flex: none; width: 28px; height: 28px; border-radius: 8px; object-fit: contain; background-color: color-mix(in srgb, var(--foreground) 5%, transparent); padding: 4px; }
+	.favicon-fallback { display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: var(--primary); background-color: color-mix(in srgb, var(--primary) 10%, transparent); }
+
+	/* Segmented control: langkah permukaan kecil dengan garis tipis, tanpa warna penuh */
+	.seg {
+		display: inline-flex;
+		gap: 2px;
+		padding: 2px;
+		border-radius: 10px;
+		background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+	}
+	.seg-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 32px;
+		padding: 0 12px;
+		border-radius: 8px;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--muted-foreground);
+		transition: color 120ms, background-color 120ms, box-shadow 120ms;
+	}
+	.seg-btn:hover { color: var(--foreground); }
+	.seg-btn[aria-selected='true'] {
+		color: var(--foreground);
+		background-color: var(--card);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 8%, transparent);
+	}
+	.seg-count {
+		min-width: 20px;
+		padding: 0 6px;
+		border-radius: 999px;
+		font-size: 11px;
+		line-height: 18px;
+		text-align: center;
+		font-variant-numeric: tabular-nums;
+		color: var(--primary-foreground);
+		background-color: var(--primary);
+	}
+
+	/* Tabel */
+	.ptable { border-collapse: collapse; }
+	.ptable th {
+		padding: 12px 16px;
+		text-align: left;
+		font-size: 12px;
+		font-weight: 400;
+		color: var(--muted-foreground);
+		white-space: nowrap;
+	}
+	.ptable td { padding: 16px; vertical-align: middle; }
+	.ptable tbody tr { border-top: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent); }
+	.ptable tbody tr:hover { background-color: color-mix(in srgb, var(--foreground) 2.5%, transparent); }
+	.avatar {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 999px;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--muted-foreground);
+		background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+	}
+	.icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		color: var(--muted-foreground);
+		transition: color 120ms, background-color 120ms;
+	}
+	.icon-btn:hover { color: var(--foreground); background-color: color-mix(in srgb, var(--foreground) 6%, transparent); }
+	.icon-btn:focus-visible, .seg-btn:focus-visible, .menu-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+	/* Menu aksi */
+	.menu { box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--foreground) 24%, transparent); }
+	.menu-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		min-height: 32px;
+		padding: 0 10px;
+		border-radius: 8px;
+		font-size: 13px;
+		text-align: left;
+		transition: background-color 120ms;
+	}
+	.menu-item:hover { background-color: color-mix(in srgb, var(--foreground) 6%, transparent); }
+	.menu-danger { color: var(--destructive); }
+</style>

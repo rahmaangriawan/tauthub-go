@@ -6237,6 +6237,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Link hidup": "Live links",
   "Rata-rata DA media": "Average media DA",
   "Buka laporan": "Open report",
+  "Salin email": "Copy email",
+  "Harga disetujui": "Approved prices",
 	};
 
 /**

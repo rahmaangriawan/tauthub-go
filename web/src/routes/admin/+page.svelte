@@ -6,8 +6,8 @@
 	// dan aktivitas agen AI. Data: GET /v1/platform/operations/summary.
 	import { onMount } from 'svelte';
 	import {
-		ArrowRight, RotateCw, Globe, ShieldCheck, Users,
-		CircleCheck, TriangleAlert, Zap, ExternalLink, ChevronLeft
+		ArrowRight, RotateCw,
+		CircleCheck, TriangleAlert, ExternalLink, ChevronLeft
 	} from '@lucide/svelte';
 	import { apiRequest, ensureValidSession, AUTH_EXPIRED_EVENT } from '$lib/auth';
 	import { fmtDateTime, fmtNum } from '$lib/admin-format';
@@ -89,9 +89,33 @@
 		return out;
 	});
 
-	const publishedPct = $derived(
-		eco && eco.total_publications > 0 ? (eco.published_publications / eco.total_publications) * 100 : 0
+	const pct = (a: number, b: number) => (b > 0 ? Math.min(100, (a / b) * 100) : 0);
+	const partnerPct = $derived(eco ? pct(eco.partner_users, eco.total_users) : 0);
+	const rates = $derived(
+		eco
+			? [
+					{ label: tr('Media aktif'), part: eco.active_media, total: eco.total_media, pct: pct(eco.active_media, eco.total_media) },
+					{ label: tr('Publikasi terbit'), part: eco.published_publications, total: eco.total_publications, pct: pct(eco.published_publications, eco.total_publications) },
+					{ label: tr('Run agen selesai'), part: eco.agent_runs_done, total: eco.total_agent_runs, pct: pct(eco.agent_runs_done, eco.total_agent_runs) },
+					{ label: tr('Gatekeeper lolos'), part: eco.gatekeeper_passed, total: eco.total_gatekeeper, pct: pct(eco.gatekeeper_passed, eco.total_gatekeeper) }
+				]
+			: []
 	);
+
+	// Geometri grafik (SVG).
+	const DR = 54;
+	const DC = 2 * Math.PI * DR;
+	const BH = 150; // tinggi area batang
+	const BY = (pct: number) => 20 + BH - (pct / 100) * BH;
+
+	const runSec = (r: RecentAgentRun) => Math.round((r.duration_ms ?? 0) / 1000);
+	const runMax = $derived(Math.max(1, ...recentAgents.map(runSec)));
+	const runH = $derived(Math.max(1, recentAgents.length) * 44);
+	const queueRows = $derived([
+		{ label: tr('Batch berjalan'), value: summary?.running_batches ?? 0, color: 'var(--primary)' },
+		{ label: tr('Dead letter'), value: summary?.dead_letter_items ?? 0, color: 'var(--destructive)' }
+	]);
+	const queueMax = $derived(Math.max(5, ...queueRows.map((q) => q.value)));
 
 	const tierLabel = (agent: string) => (agent ? agent.charAt(0).toUpperCase() + agent.slice(1) : agent);
 	const shortModel = (model: string | null) => (model ? model.split('/').pop() : 'default');
@@ -152,6 +176,58 @@
 				<a class="notice-action" href="/admin/operations">{tr('Buka antrean')}</a>
 			</div>
 		{/each}
+
+		<!-- Angka ekosistem -->
+		<div class="mt-8 grid items-stretch gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+			<div class="app-card flex flex-col p-6">
+				<h2 class="text-base font-medium">{tr('Pengguna')}</h2>
+				<p class="mt-1 text-sm text-muted-foreground">{tr('Komposisi mitra dan klien')}</p>
+				<div class="mt-6 flex flex-1 items-center gap-6">
+					<svg viewBox="0 0 140 140" class="donut" role="img" aria-label="{eco ? `${fmtNum(eco.partner_users)} ${tr('mitra')}, ${fmtNum(eco.client_users)} ${tr('klien')}` : ''}">
+						<circle cx="70" cy="70" r={DR} class="donut-track" />
+						{#if eco && eco.total_users > 0}
+							<circle
+								cx="70" cy="70" r={DR} class="donut-seg"
+								stroke-dasharray="{(partnerPct / 100) * DC} {DC}"
+								transform="rotate(-90 70 70)"
+							/>
+						{/if}
+						<text x="70" y="68" text-anchor="middle" class="donut-num">{eco ? fmtNum(eco.total_users) : '—'}</text>
+						<text x="70" y="86" text-anchor="middle" class="donut-lbl">{tr('pengguna')}</text>
+					</svg>
+					{#if eco}
+						<dl class="flex flex-col gap-4 text-xs">
+							<div>
+								<dt class="flex items-center gap-2 text-muted-foreground"><span class="key key-a" aria-hidden="true"></span>{tr('Mitra')}</dt>
+								<dd class="mt-1 text-sm font-medium tabular-nums">{fmtNum(eco.partner_users)} <span class="font-normal text-muted-foreground">· {Math.round(partnerPct)}%</span></dd>
+							</div>
+							<div>
+								<dt class="flex items-center gap-2 text-muted-foreground"><span class="key key-b" aria-hidden="true"></span>{tr('Klien')}</dt>
+								<dd class="mt-1 text-sm font-medium tabular-nums">{fmtNum(eco.client_users)} <span class="font-normal text-muted-foreground">· {Math.round(100 - partnerPct)}%</span></dd>
+							</div>
+						</dl>
+					{/if}
+				</div>
+			</div>
+
+			<div class="app-card p-6">
+				<h2 class="text-base font-medium">{tr('Kesehatan ekosistem')}</h2>
+				<p class="mt-1 text-sm text-muted-foreground">{tr('Persentase yang sudah aktif, terbit, selesai, atau lolos')}</p>
+				<svg viewBox="0 0 480 230" class="bars mt-4" role="img" aria-label={rates.map((r) => `${r.label} ${Math.round(r.pct)}%`).join(', ')}>
+					{#each [0, 50, 100] as t (t)}
+						<line x1="44" x2="476" y1={BY(t)} y2={BY(t)} class="grid-line" />
+						<text x="38" y={BY(t) + 4} text-anchor="end" class="axis">{t}%</text>
+					{/each}
+					{#each rates as r, i (r.label)}
+						{@const x = 64 + i * 104}
+						<rect {x} y={BY(100)} width="64" height={BH} rx="6" class="bar-bg" />
+						<rect {x} y={BY(r.pct)} width="64" height={(r.pct / 100) * BH} rx="6" class="bar-fg" />
+						<text x={x + 32} y={BY(r.pct) + 22} text-anchor="middle" class="bar-val">{Math.round(r.pct)}%</text>
+						<text x={x + 32} y="222" text-anchor="middle" class="axis">{r.label}</text>
+					{/each}
+				</svg>
+			</div>
+		</div>
 
 		<div class="mt-8 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
 			<!-- Feed publikasi -->
@@ -277,41 +353,6 @@
 			</div>
 		</div>
 
-		<!-- Angka ekosistem -->
-		<div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<div class="app-card p-5">
-				<p class="flex items-center gap-2 text-xs text-muted-foreground"><Users size={14} strokeWidth={1.5} /> {tr('Pengguna')}</p>
-				<p class="mt-3 text-[28px] font-medium leading-none tabular-nums tracking-tight">{eco ? fmtNum(eco.total_users) : '—'}</p>
-				<p class="mt-2 text-xs text-muted-foreground">
-					{eco ? `${fmtNum(eco.partner_users)} ${tr('mitra')} · ${fmtNum(eco.client_users)} ${tr('klien')}` : ''}
-				</p>
-			</div>
-			<div class="app-card p-5">
-				<p class="flex items-center gap-2 text-xs text-muted-foreground"><Globe size={14} strokeWidth={1.5} /> {tr('Katalog media')}</p>
-				<p class="mt-3 text-[28px] font-medium leading-none tabular-nums tracking-tight">{eco ? fmtNum(eco.total_media) : '—'}</p>
-				<p class="mt-2 text-xs text-muted-foreground">
-					{eco ? `${fmtNum(eco.active_media)} ${tr('aktif')} · ${fmtNum(eco.total_media - eco.active_media)} ${tr('draft atau non-aktif')}` : ''}
-				</p>
-			</div>
-			<div class="app-card p-5">
-				<p class="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck size={14} strokeWidth={1.5} /> {tr('Publikasi')}</p>
-				<p class="mt-3 text-[28px] font-medium leading-none tabular-nums tracking-tight">{eco ? fmtNum(eco.total_publications) : '—'}</p>
-				<div class="mt-3 flex items-center gap-2">
-					<span class="meter" aria-hidden="true"><span style="width: {publishedPct}%"></span></span>
-					<span class="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-						{eco ? `${fmtNum(eco.published_publications)}/${fmtNum(eco.total_publications)} ${tr('terbit')}` : ''}
-					</span>
-				</div>
-			</div>
-			<div class="app-card p-5">
-				<p class="flex items-center gap-2 text-xs text-muted-foreground"><Zap size={14} strokeWidth={1.5} /> {tr('Taut Agents')}</p>
-				<p class="mt-3 text-[28px] font-medium leading-none tabular-nums tracking-tight">{eco ? fmtNum(eco.total_agent_runs) : '—'}</p>
-				<p class="mt-2 text-xs text-muted-foreground">
-					{eco ? `${fmtNum(eco.agent_runs_done)} ${tr('selesai')} · gatekeeper ${fmtNum(eco.gatekeeper_passed)}/${fmtNum(eco.total_gatekeeper)}` : ''}
-				</p>
-			</div>
-		</div>
-
 		<div class="mt-8 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
 			<!-- Run agen -->
 			<div class="app-card p-6">
@@ -333,22 +374,18 @@
 						{/each}
 					</div>
 				{:else if recentAgents.length > 0}
-					<ol class="mt-4">
-						{#each recentAgents as run (run.id)}
-							<li class="run-row">
-								<div class="min-w-0 flex-1">
-									<p class="truncate text-[13px] font-medium">{tierLabel(run.agent)}</p>
-									<p class="truncate text-xs text-muted-foreground">{run.campaign_name || tr('Kampanye')}</p>
-								</div>
-								<span class="run-meta">{shortModel(run.model)}</span>
-								<span class="run-meta tabular-nums">{run.duration_ms ? `${Math.round(run.duration_ms / 1000)}s` : '—'}</span>
-								<span class="run-status" data-tone={run.status === 'done' ? 'ok' : run.status === 'failed' ? 'danger' : 'warn'}>
-									<span class="status-dot" data-tone={run.status === 'done' ? 'ok' : run.status === 'failed' ? 'danger' : 'warn'} aria-hidden="true"></span>
-									{run.status === 'done' ? tr('Selesai') : run.status === 'failed' ? tr('Gagal') : run.status}
-								</span>
-							</li>
+					<svg viewBox="0 0 480 {runH}" class="bars mt-4" role="img" aria-label={recentAgents.map((r) => `${tierLabel(r.agent)} ${runSec(r)}s`).join(', ')}>
+						{#each recentAgents as run, i (run.id)}
+							{@const y = i * 44}
+							<text x="0" y={y + 17} class="row-name">{tierLabel(run.agent).slice(0, 18)}</text>
+							<text x="0" y={y + 33} class="axis">{(run.campaign_name || tr('Kampanye')).slice(0, 22)}</text>
+							<rect x="160" y={y + 8} width="280" height="22" rx="5" class="bar-bg" />
+							<rect x="160" y={y + 8} width={Math.max(4, (runSec(run) / runMax) * 280)} height="22" rx="5" fill={run.status === 'done' ? 'var(--primary)' : run.status === 'failed' ? 'var(--destructive)' : 'var(--warning)'}>
+								<title>{shortModel(run.model)} · {run.status}</title>
+							</rect>
+							<text x="476" y={y + 24} text-anchor="end" class="bar-val-out">{run.duration_ms ? `${runSec(run)}s` : '—'}</text>
 						{/each}
-					</ol>
+					</svg>
 				{:else}
 					<div class="mt-4 rounded-lg border border-dashed px-6 py-10 text-center">
 						<p class="text-sm text-muted-foreground">{tr('Belum ada run agen.')}</p>
@@ -369,26 +406,21 @@
 					</a>
 				</div>
 
-				<dl class="spec-list mt-4">
-					<div class="spec-row">
-						<dt>{tr('Batch berjalan')}</dt>
-						<dd class="tabular-nums">{fmtNum(summary?.running_batches ?? 0)}</dd>
-					</div>
-					<div class="spec-row">
-						<dt>{tr('Dead letter')}</dt>
-						<dd>
-							<span class="status-dot" data-tone={summary?.dead_letter_items ? 'danger' : 'ok'} aria-hidden="true"></span>
-							{summary?.dead_letter_items ? `${fmtNum(summary.dead_letter_items)} ${tr('perlu aksi')}` : tr('Bersih')}
-						</dd>
-					</div>
-					<div class="spec-row">
-						<dt>{tr('Scheduler')}</dt>
-						<dd>
-							<span class="status-dot" data-tone="ok" aria-hidden="true"></span>
-							{tr('Aktif')}
-						</dd>
-					</div>
-				</dl>
+				<svg viewBox="0 0 480 120" class="bars mt-6" role="img" aria-label="{tr('Batch berjalan')} {fmtNum(summary?.running_batches ?? 0)}, {tr('Dead letter')} {fmtNum(summary?.dead_letter_items ?? 0)}">
+					{#each queueRows as q, i (q.label)}
+						{@const y = i * 52}
+						<text x="0" y={y + 14} class="row-name">{q.label}</text>
+						<rect x="0" y={y + 24} width="440" height="16" rx="5" class="bar-bg" />
+						{#if q.value > 0}
+							<rect x="0" y={y + 24} width={Math.max(6, (q.value / queueMax) * 440)} height="16" rx="5" fill={q.color} />
+						{/if}
+						<text x="476" y={y + 37} text-anchor="end" class="bar-val-out">{fmtNum(q.value)}</text>
+					{/each}
+				</svg>
+				<p class="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+					<span class="status-dot" data-tone="ok" aria-hidden="true"></span>
+					{tr('Scheduler')} {tr('Aktif')}
+				</p>
 
 				<a class="app-link-sm mt-auto pt-6" href="/admin/audit-log">
 					{tr('Audit log')}
@@ -446,7 +478,6 @@
 	}
 	.status-dot[data-tone='ok'] { background-color: var(--success); }
 	.status-dot[data-tone='warn'] { background-color: var(--warning); }
-	.status-dot[data-tone='danger'] { background-color: var(--destructive); }
 
 	/* ── Tombol ikon ── */
 	.app-icon-btn {
@@ -535,33 +566,6 @@
 	.feed-row:first-child::before { top: 16px; }
 	.feed-row:last-child::before { bottom: calc(100% - 22px); }
 
-	/* ── Run agen: satu baris, kolom sejajar ── */
-	.run-row {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		min-height: 48px;
-	}
-	.run-row + .run-row { border-top: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent); }
-	.run-meta {
-		flex: 0 0 auto;
-		font-family: var(--font-mono);
-		font-size: 11px;
-		line-height: 16px;
-		color: var(--muted-foreground);
-		white-space: nowrap;
-	}
-	.run-byline { display: none; }
-	.run-status {
-		flex: 0 0 auto;
-		display: inline-flex;
-		align-items: center;
-		font-size: 12px;
-		color: var(--muted-foreground);
-	}
-	.run-status[data-tone='danger'] { color: var(--destructive); }
-	.run-status[data-tone='warn'] { color: var(--warning); }
-
 	/* ── Daftar spesifikasi label/nilai ── */
 	.spec-list { display: flex; flex-direction: column; }
 	.spec-row {
@@ -579,21 +583,23 @@
 	.spec-danger { color: var(--destructive); }
 
 	/* ── Meter publikasi ── */
-	.meter {
-		position: relative;
-		display: block;
-		flex: 1;
-		height: 4px;
-		border-radius: 999px;
-		background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
-		overflow: hidden;
-	}
-	.meter > span {
-		position: absolute;
-		inset: 0 auto 0 0;
-		border-radius: 999px;
-		background-color: var(--primary);
-	}
+	.donut { width: 140px; height: 140px; flex: none; }
+	.donut-track, .donut-seg { fill: none; stroke-width: 14; }
+	.donut-track { stroke: color-mix(in srgb, var(--foreground) 14%, transparent); }
+	.donut-seg { stroke: var(--primary); stroke-linecap: butt; }
+	.donut-num { fill: var(--foreground); font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+	.donut-lbl { fill: var(--muted-foreground); font-size: 11px; }
+	.key { width: 8px; height: 8px; border-radius: 999px; }
+	.key-a { background-color: var(--primary); }
+	.key-b { background-color: color-mix(in srgb, var(--foreground) 14%, transparent); }
+	.bars { width: 100%; height: auto; }
+	.grid-line { stroke: color-mix(in srgb, var(--foreground) 10%, transparent); stroke-width: 1; }
+	.axis { fill: var(--muted-foreground); font-size: 11px; }
+	.bar-bg { fill: color-mix(in srgb, var(--foreground) 6%, transparent); }
+	.bar-fg { fill: var(--primary); }
+	.row-name { fill: var(--foreground); font-size: 13px; font-weight: 500; }
+	.bar-val-out { fill: var(--muted-foreground); font-size: 12px; font-variant-numeric: tabular-nums; }
+	.bar-val { fill: var(--primary-foreground); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 
 	/* ── Pintasan ── */
 	.shortcut {
