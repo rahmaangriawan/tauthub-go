@@ -1,6 +1,6 @@
 # Entitas
 
-> Tab Entitas menampilkan data brand yang sudah tersimpan di brief, dalam lima kartu, beserta persentase kelengkapan isian wajib dan daftar isian yang belum terisi. Tab ini hanya untuk dibaca. Untuk mengisi atau mengubah data, pakai Copilot Chat atau formulir Instan Brief.
+> Tab Entitas menampilkan data brand yang sudah tersimpan di brief, dalam lima kartu, beserta persentase kelengkapan isian wajib dan daftar isian yang belum terisi. Isian bisa diubah langsung lewat ikon pensil di tiap baris. Untuk mengisi dari nol atau mengubah arti isian, pakai Copilot Chat atau formulir Instan Brief.
 
 **Lokasi:** menu **Kampanye** › **Profiler** › pilih pintu masuk › tab **Entitas**
 
@@ -77,7 +77,10 @@ Kartu atau baris yang belum terisi menampilkan teks miring seperti **Belum diisi
 
 ## Aturan dan batasan
 
-- Tab ini tidak punya kolom atau tombol untuk mengedit.
+- Ikon pensil muncul di baris teks (nama resmi, deskripsi, boilerplate, fakta, USP, wilayah, website, alias, kanal resmi, keyword dan URL target) serta di daftar **PILAR NARASI UTAMA** dan **Target Pertanyaan AI**. Klik pensil, ubah teksnya, lalu **Simpan**. Hanya satu isian yang bisa diubah pada satu waktu. Kategori, serta aturan klaim dan kata terlarang di kotak **LARANGAN KERAS**, diubah lewat Instan Brief atau Copilot Chat.
+- Isian tidak bisa dikosongkan dari sini. Kalau teksnya dikosongkan lalu disimpan, muncul pesan penolakan.
+- Peran Writer atau lebih tinggi diperlukan untuk menyimpan. Peran di bawahnya mendapat pesan bahwa perannya belum bisa mengubah bagian ini.
+- Setelah isian diubah, **Ringkasan Entitas** menjadi usang. Muncul banner **Ringkasan belum diperbarui** dengan tombol **Perbarui ringkasan**. Artikel gaya **Yang Proper** memakai ringkasan, jadi tekan tombol itu sebelum menulis artikel.
 - Angka 100% hanya berarti isian wajib sudah terisi. Isian opsional tidak dihitung, jadi Keunggulan atau Fakta penting bisa saja masih kosong.
 - Tim Tauthub yang menentukan daftar isian wajib, dan daftar itu bisa berubah.
 - Tab ini tidak menampilkan semua isian. **Nama alternatif atau alias**, **Kanal resmi**, **Keyword prioritas dan URL target**, serta isian gaya penulisan dan pedoman konten tidak tampil di sini. Isinya tersimpan dan ikut menjadi bahan [Ringkasan brief](08-ringkasan-brief.md).
@@ -93,7 +96,10 @@ Mengunggah dokumen tidak mengisi tab ini. Minta Tubi membaca dokumen di **Copilo
 Tidak. Keunggulan unik termasuk isian opsional. Klik **Lengkapi field opsional lewat Copilot →** kalau Anda ingin mengisinya.
 
 **Bisakah saya mengedit langsung di tab Entitas?**
-Tidak. Ubah data lewat **Copilot Chat** atau **Instan Brief**.
+Bisa, lewat ikon pensil di tiap baris. Setelah menyimpan, perbarui ringkasannya lewat banner di bagian atas supaya perubahan ikut ke artikel.
+
+**Apa fungsi tombol Buat artikel di Target Pertanyaan AI?**
+Tombol itu menyimpan pertanyaan sebagai topik artikel, menjadikan brief ini brief aktif, lalu membuka daftar **Kampanye**. Di sana ada petunjuk dengan topiknya. Buka satu kampanye, lalu Pengelola Naskah: topik terisi sendiri, gaya **Yang Proper** terpilih, dan brief aktif sudah terpilih di **Memori Brand**. Topik dipakai sekali dan hilang setelah 24 jam. Tombol **Batalkan topik** di banner menghapusnya.
 
 **Apa arti lencana Sinyal Siap?**
 Pertanyaan itu sudah tersimpan sebagai isian yang terisi atau terkonfirmasi. Lencana ini tidak menjamin brand Anda muncul dalam jawaban mesin AI.

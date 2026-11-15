@@ -170,6 +170,8 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			minWords, maxWords = *voiceRange.min, *voiceRange.max
 		}
 		voice := d.brandVoiceLimits(ctx, content, bahasaUtama, minWords, maxWords)
+		// Kata terlarang dari brief: cocok harfiah, tidak bergantung pada model.
+		forbiddenHits := brandflow.FindForbiddenHits(title+" "+text, brandflow.BriefForbiddenTerms(ctx, d.Pool, itemID))
 
 		safetyStatus := "review_required"
 		switch safety.RiskLevel {
@@ -199,14 +201,20 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 			linkPolicy["status"] = "failed"
 		}
 		checks["linkHealth"] = map[string]any{"status": linkStatus, "links": links.Links, "policy": linkPolicy}
+		voiceNotes := capStrings(voice.Notes, 3)
+		if len(forbiddenHits) > 0 {
+			voiceStatus = "review_required"
+			voiceNotes = append([]string{"Kata terlarang dari brief ditemukan di artikel: " + strings.Join(forbiddenHits, ", ") + "."}, voiceNotes...)
+		}
 		checks["brandVoice"] = map[string]any{
-			"status": voiceStatus, "level": voiceLevel, "notes": capStrings(voice.Notes, 3),
+			"status": voiceStatus, "level": voiceLevel, "notes": voiceNotes,
+			"forbidden_hits": forbiddenHits,
 		}
 
 		overallVerdict := "passed"
 		if safetyStatus == "failed" || linkStatus == "failed" {
 			overallVerdict = "failed"
-		} else if safetyStatus == "review_required" || linkStatus == "review_required" {
+		} else if safetyStatus == "review_required" || linkStatus == "review_required" || len(forbiddenHits) > 0 {
 			overallVerdict = "review_required"
 		}
 
@@ -254,12 +262,17 @@ func (d *Deps) runGatekeeper(ctx context.Context, campaignID, brandID, userID st
 				"Catatan revisi AI Overview (WAJIB diperbaiki saat menulis ulang artikel):",
 				"- "+strings.Join(notes, "\n- "))
 		}
+		if len(forbiddenHits) > 0 {
+			promptLines = append(promptLines,
+				"Kata terlarang dari brief ditemukan di artikel (WAJIB dihapus atau diganti dengan padanan netral, tanpa mengubah fakta):",
+				"- "+strings.Join(forbiddenHits, "\n- "))
+		}
 		promptLines = append(promptLines, "", "Output JSON valid {final_html, verdict: layak_tayang|revisi|gagal, catatan}.")
 		prompt := strings.Join(promptLines, "\n")
 
 		// Percepatan: pass revisi akhir hanya bila ada yang perlu diperbaiki
 		// (safety/link tidak passed atau AI Overview menolak).
-		needsRepair := safetyStatus != "passed" || linkStatus != "passed" || ai.AIOverviewRejected(aiOverview)
+		needsRepair := safetyStatus != "passed" || linkStatus != "passed" || ai.AIOverviewRejected(aiOverview) || len(forbiddenHits) > 0
 		finalHTML := content
 		verdict := "layak_tayang"
 		if needsRepair {

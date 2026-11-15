@@ -255,6 +255,8 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	checksWG.Wait()
 	batchMS := time.Since(startedAt).Milliseconds()
 	voice := brandVoiceLimits(text, voiceRange)
+	// Kata terlarang dari brief: cocok harfiah, tidak bergantung pada model.
+	forbiddenHits := FindForbiddenHits(title+" "+text, BriefForbiddenTerms(ctx, d.Pool, itemID))
 
 	// Batas tautan keluar: media hanya menyetujui N tautan. Hitung tautan fisik
 	// di artikel (self-link situs media tidak dihitung) lalu bandingkan dengan
@@ -299,11 +301,18 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 		"linkHealth": map[string]any{"status": linkVerdict, "links": links.Links, "policy": linkPolicy},
 		"brandVoice": map[string]any{"status": "passed", "level": voice.Level, "notes": capStrings(voice.Notes, 3)},
 	}
+	if len(forbiddenHits) > 0 {
+		checks["brandVoice"] = map[string]any{
+			"status": "review_required", "level": voice.Level,
+			"notes": append([]string{"Kata terlarang dari brief ditemukan di artikel: " + strings.Join(forbiddenHits, ", ") + ". Hapus atau ganti, lalu Cek Validasi ulang."}, capStrings(voice.Notes, 3)...),
+			"forbidden_hits": forbiddenHits,
+		}
+	}
 
 	overallVerdict := "passed"
 	if safetyStatus == "failed" || linkVerdict == "failed" {
 		overallVerdict = "failed"
-	} else if safetyStatus == "review_required" || linkVerdict == "review_required" {
+	} else if safetyStatus == "review_required" || linkVerdict == "review_required" || len(forbiddenHits) > 0 {
 		overallVerdict = "review_required"
 	}
 
@@ -333,7 +342,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 		switch {
 		case safetyStatus == "failed" || links.Verdict == "failed":
 			verdict = "gagal"
-		case safetyStatus == "review_required" || linkVerdict == "review_required" || linkPolicyFailed:
+		case safetyStatus == "review_required" || linkVerdict == "review_required" || linkPolicyFailed || len(forbiddenHits) > 0:
 			verdict = "revisi"
 		}
 	}
@@ -347,7 +356,7 @@ func (d *Deps) gatekeeperAuditOne(ctx context.Context, campaign bsRow, campaignI
 	switch {
 	case safetyStatus == "failed" || links.Verdict == "failed":
 		status = "blocked"
-	case linkPolicyFailed || safetyStatus == "review_required" || linkVerdict == "review_required":
+	case linkPolicyFailed || safetyStatus == "review_required" || linkVerdict == "review_required" || len(forbiddenHits) > 0:
 		// Tautan berlebih bisa diperbaiki klien (hapus tautan lalu Cek
 		// Validasi ulang) — 'revision', bukan 'blocked' yang terasa final.
 		status = "revision"

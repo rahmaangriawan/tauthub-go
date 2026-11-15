@@ -1040,6 +1040,24 @@
 			/* snapshot rusak — abaikan */
 		}
 	}
+	// Topik dari "Buat artikel untuk ini" di Taut Brief: dipakai sekali, hanya bila
+	// kolom topik masih kosong, dan kedaluwarsa setelah 24 jam.
+	if (typeof localStorage !== 'undefined' && !untrack(() => readOnly) && !untrack(() => topic).trim()) {
+		try {
+			const key = `tauthub:pending-topic:${untrack(() => brandId)}`;
+			const raw = localStorage.getItem(key);
+			if (raw) {
+				const pending = JSON.parse(raw) as { topic?: string; at?: number };
+				if (pending?.topic && Date.now() - Number(pending.at ?? 0) < 24 * 60 * 60 * 1000) {
+					topic = String(pending.topic);
+					gayaArtikel = 'proper';
+				}
+				localStorage.removeItem(key);
+			}
+		} catch {
+			/* penyimpanan browser diblokir atau isinya rusak: abaikan */
+		}
+	}
 	// Simpan setiap perubahan isian (tanpa debounce: objeknya kecil).
 	$effect(() => {
 		if (readOnly) return;
@@ -1069,6 +1087,12 @@
 	// Status ringkasan brief (agent entitas/file). Writer mode proper menolak
 	// brief yang ringkasannya belum siap, jadi peringatkan lebih awal di sini.
 	let copilotSummaryNotice = $state('');
+	/** Nilai mentah brief terpilih (untuk mengambil keyword dan URL target). */
+	let copilotRawValues = $state<Record<string, unknown>>({});
+	/** Jenis ringkasan yang sudah siap tetapi bahan briefnya berubah sesudahnya. */
+	let copilotStaleKinds = $state<string[]>([]);
+	let briefLinkBusy = $state(false);
+	let briefLinkNotice = $state('');
 	const copilotBriefOptions = $derived(copilotBriefs.map((b) => ({ value: b.id, label: b.name })));
 	// Nama pada baris Brand mengikuti nama brief (Profiler) yang dipilih —
 	// nilai canonical_name di fakta jadi cadangan bila brief tidak punya nama.
@@ -1185,6 +1209,8 @@
 		copilotLoadedBriefId = '';
 		copilotError = '';
 		copilotSummaryNotice = '';
+		copilotRawValues = {};
+		copilotStaleKinds = [];
 		if (!id) return;
 		copilotBusy = true;
 		try {
@@ -1196,6 +1222,7 @@
 			const data = await res.json().catch(() => null);
 			copilotBriefName = String(data?.profile?.name ?? copilotBriefName);
 			copilotEntries = copilotCollectEntries(data?.values ?? {}, Array.isArray(data?.fields) ? data.fields : []);
+			copilotRawValues = (data?.values ?? {}) as Record<string, unknown>;
 			copilotLoadedBriefId = id;
 
 			// Ringkasan entitas wajib siap sebelum Writer mode proper bisa jalan.
@@ -1206,6 +1233,7 @@
 				const entity = items.find((s) => s?.kind === 'entity');
 				const file = items.find((s) => s?.kind === 'file');
 				const pending = [entity, file].some((s) => s?.status === 'queued' || s?.status === 'running');
+				copilotStaleKinds = items.filter((s) => s?.status === 'ready' && s?.stale).map((s) => String(s.kind));
 				// Ringkasan dibuat manual di halaman Profiler, TAPI Writer Proper
 				// tidak bisa jalan tanpa ringkasan entitas. Jadi minta dibuat di
 				// sini juga: pengguna tidak perlu tahu harus membuka tab Ringkasan
@@ -1236,6 +1264,73 @@
 		} finally {
 			copilotBusy = false;
 		}
+	}
+
+	/** Keyword dan URL target dari brief: satu pasangan "keyword, URL" per baris. */
+	function parseKeywordPairs(raw: unknown): Array<{ keyword: string; url: string }> {
+		const text = Array.isArray(raw) ? raw.map(String).join('\n') : String(raw ?? '');
+		const out: Array<{ keyword: string; url: string }> = [];
+		for (const line of text.split(/[\r\n;]+/)) {
+			const clean = line.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim();
+			const m = clean.match(/^(.*?)\s*(?:,|\t|→|\|)\s*(https?:\/\/\S+)\s*$/i);
+			if (m && m[1].trim()) out.push({ keyword: m[1].trim(), url: m[2] });
+		}
+		return out;
+	}
+
+	/** Isi baris tautan dari keyword dan URL target brief. Tidak menimpa baris yang sudah ada. */
+	async function ambilTautanDariBrief() {
+		if (briefLinkBusy) return;
+		briefLinkBusy = true;
+		briefLinkNotice = '';
+		try {
+			if (!(await loadCopilotBriefs()) || copilotBriefs.length === 0) {
+				briefLinkNotice = tr('Belum ada brief. Buat dulu di halaman Taut Brief.');
+				return;
+			}
+			if (!copilotBriefId || copilotLoadedBriefId !== copilotBriefId) {
+				await pickCopilotBrief(copilotBriefId || copilotBriefs[0].id);
+			}
+			const pairs = parseKeywordPairs(copilotRawValues['target_keywords_urls']);
+			if (pairs.length === 0) {
+				briefLinkNotice = tr('Brief ini belum punya keyword dan URL target.');
+				return;
+			}
+			const have = new Set(linkRows.map((r) => `${r.anchor.trim().toLowerCase()}|${r.url.trim()}`));
+			const next = [...linkRows];
+			let added = 0;
+			for (const pair of pairs) {
+				if (next.length >= maxLinkRows) break;
+				const key = `${pair.keyword.toLowerCase()}|${pair.url}`;
+				if (have.has(key)) continue;
+				have.add(key);
+				next.push({ id: ++linkSeq, anchor: pair.keyword, url: pair.url });
+				added += 1;
+			}
+			linkRows = next;
+			briefLinkNotice =
+				added > 0
+					? `${added} ${tr('tautan diambil dari brief.')}`
+					: next.length >= maxLinkRows
+						? tr('Batas maksimal tautan media ini sudah tercapai.')
+						: tr('Semua tautan dari brief sudah ada.');
+		} finally {
+			briefLinkBusy = false;
+		}
+	}
+
+	/** Minta ringkasan yang usang dibuat ulang (satu job per brief dan jenis). */
+	async function perbaruiRingkasanBrief() {
+		const id = copilotBriefId;
+		if (!id || copilotStaleKinds.length === 0) return;
+		const kinds = [...copilotStaleKinds];
+		copilotStaleKinds = [];
+		for (const kind of kinds) {
+			await apiRequest(`${profilerBase}/profiles/${encodeURIComponent(id)}/brief/summaries/${kind}/regenerate`, {
+				method: 'POST'
+			}).catch(() => undefined);
+		}
+		copilotSummaryNotice = tr('Ringkasan sedang diperbarui. Tunggu sebentar, lalu buat draf lagi.');
 	}
 
 	async function tarikFaktaCopilot() {
@@ -1648,6 +1743,17 @@
 			>
 				<Plus size={14} /> {tr('Tambah tautan')}
 			</button>
+			<button
+				class="app-btn app-btn-soft mt-3 ml-2 !min-h-8 !px-3 !text-xs"
+				type="button"
+				disabled={briefLinkBusy || linkRows.length >= maxLinkRows}
+				onclick={() => void ambilTautanDariBrief()}
+			>
+				{briefLinkBusy ? tr('Mengambil…') : tr('Ambil dari brief')}
+			</button>
+			{#if briefLinkNotice}
+				<p class="mt-1.5 text-[11px] text-muted-foreground">{briefLinkNotice}</p>
+			{/if}
 			{#if linkRows.length >= maxLinkRows}
 				<p class="mt-1.5 text-center text-[11px] text-muted-foreground">
 					{tr('Batas maksimal tautan media ini sudah tercapai.')}
@@ -2202,6 +2308,12 @@
 											{/if}
 											{#if copilotError}
 												<p class="mt-1 text-xs" style="color: var(--destructive);">{copilotError}</p>
+											{/if}
+											{#if copilotStaleKinds.length > 0}
+												<p class="mt-2 rounded-lg p-2 text-xs" style="background: var(--warning-soft); color: var(--warning);">
+													{tr('Brief diubah setelah ringkasannya dibuat, jadi perubahan terbaru belum ikut ke artikel.')}
+													<button class="ml-1 font-semibold underline underline-offset-2" type="button" onclick={() => void perbaruiRingkasanBrief()}>{tr('Perbarui ringkasan')}</button>
+												</p>
 											{/if}
 											{#if copilotSummaryNotice}
 												<p class="mt-2 rounded-lg p-2 text-xs" style="background: var(--warning-soft); color: var(--warning);">

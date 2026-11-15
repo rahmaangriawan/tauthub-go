@@ -43,13 +43,21 @@ Tombol **Buat Draf dengan AI** mati selama brief belum dipilih. Tombol itu juga 
 
 Kalau brief yang Anda pilih belum menyimpan fakta, tombol **Buka Taut Brief** tampil untuk membuka brief itu langsung.
 
+### Cara mengisi tautan dari brief
+
+Di bagian tautan, tombol **Ambil dari brief** mengisi baris tautan dari **Keyword prioritas dan URL target** milik brief yang dipilih (satu pasangan keyword dan URL per baris). Keyword menjadi teks tautan. Baris yang sudah ada tidak ditimpa dan pasangan yang sama tidak dimasukkan dua kali. Jumlahnya dibatasi oleh batas tautan media. Kalau brief belum punya pasangan keyword dan URL, muncul pemberitahuan.
+
+### Pemeriksaan kata terlarang
+
+Isian **Kata atau frasa yang harus dihindari** milik brief dicocokkan dengan teks artikel saat **Cek Validasi**. Pencocokan harfiah, tanpa membedakan huruf besar dan kecil, dan kata tunggal hanya cocok sebagai kata utuh. Kalau ada yang ditemukan, hasil cek menyebut kata itu, status artikel menjadi **Revisi**, dan Anda perlu menghapus atau mengganti katanya lalu menjalankan **Cek Validasi** lagi. Pemeriksaan ini hanya berlaku untuk artikel yang memakai brief (gaya **Yang Proper**). Aturan klaim terlarang tidak dicocokkan harfiah karena berbentuk kalimat, jadi tetap dinilai AI.
+
 ## Syarat ringkasan
 
 Pada gaya **Yang Proper**, **Ringkasan Entitas** milik brief harus berstatus **Siap**.
 
 - Kalau belum siap, Tauthub langsung memintanya dibuat saat Anda memilih brief. Lalu Tauthub menampilkan pesan agar Anda menunggu sebentar sebelum membuat draf lagi.
 - **Ringkasan File** membantu kalau brief punya dokumen, tautan, atau post Timeline. Kalau belum siap, penulisan tetap berjalan tanpa ringkasan itu, dan Tauthub memintanya dibuat di latar belakang.
-- Ringkasan yang berstatus **Perlu diperbarui** tetap dipakai.
+- Ringkasan yang berstatus **Perlu diperbarui** tetap dipakai, tetapi isi brief yang terbaru belum ikut. Di bawah pilihan brief muncul peringatan **Brief diubah setelah ringkasannya dibuat** dengan tombol **Perbarui ringkasan**. Setelah menekan tombolnya, tunggu sebentar lalu buat draf lagi.
 - Tautan **Buka Ringkasan Brief** di pesan peringatan membuka tab **Ringkasan** milik brief itu di tab baru.
 
 Detail ringkasan ada di [Ringkasan brief](08-ringkasan-brief.md).

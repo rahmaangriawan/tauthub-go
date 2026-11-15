@@ -25,6 +25,11 @@ Catatan:
 - **Perjalanan artikel**: di detail publikasi sekarang ada urutan kejadian tiap artikel beserta tanggal dan jamnya, mulai dari pesanan dibuat, menunggu media, sampai terbit dan cek link. Artikel yang sudah lebih dari 2 hari menunggu media diberi catatan khusus, dan kamu menerima kabar sekali sebelum batas 3 hari lewat.
 - **Pakai untuk Artikel**: tombol di Taut Brief menjadikan brief yang sedang kamu buka sebagai brief aktif. Di Pengelola Naskah, brief itu langsung terpilih untuk gaya Yang Proper, jadi tidak perlu memilih ulang di tiap artikel.
 - **Cari brief dan pindah brief**: daftar brief bisa dicari, dan halaman Instan Brief punya pilihan brief di bagian atas.
+- **Ambil tautan dari brief**: di Pengelola Naskah, tombol Ambil dari brief mengisi baris tautan dari keyword dan URL target yang sudah ada di brief.
+- **Ubah isian langsung di tab Entitas**: klik ikon pensil di tiap baris, ubah, lalu simpan, tanpa pindah ke Instan Brief.
+- **Peringatan ringkasan belum diperbarui**: kalau kamu mengubah brief setelah ringkasannya dibuat, muncul peringatan dan tombol untuk memperbaruinya, supaya artikel memakai isi brief yang terbaru.
+- **Buat artikel dari Target Pertanyaan AI**: tombol di tiap pertanyaan membawa topiknya ke Pengelola Naskah.
+- **Cek kata terlarang**: kata atau frasa yang kamu larang di brief sekarang diperiksa langsung di Cek Validasi, dan artikel yang memuatnya diminta direvisi.
 
 ### Perbaikan
 - Tab Entitas sekarang menampilkan nama alternatif, kanal resmi, serta keyword dan URL target yang sudah kamu isi.

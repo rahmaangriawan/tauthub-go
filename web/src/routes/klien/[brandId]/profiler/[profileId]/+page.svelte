@@ -69,6 +69,17 @@
 	// Sidebar brief = riwayat brief milik brand ini. Nantinya diisi onMount.
 	let briefs = $state<BriefListItem[]>([]);
 	let briefSearch = $state('');
+	// Edit langsung di tab Entitas: satu isian diedit pada satu waktu.
+	let editKey = $state('');
+	let editValue = $state('');
+	let editSaving = $state(false);
+	const EDIT_HINT: Record<string, string> = {
+		preferred_terms: 'Pisahkan dengan titik koma.',
+		canonical_links: 'Satu URL per baris, diawali http:// atau https://.',
+		target_keywords_urls: 'Satu pasangan per baris: keyword, lalu URL.',
+		target_questions: 'Satu pertanyaan per baris.',
+		allowed_claims: 'Satu klaim per baris.'
+	};
 	/** Brief aktif milik pengguna ini (dipilih otomatis di Pengelola Naskah). */
 	let activeBriefId = $state('');
 	let activeSaving = $state(false);
@@ -654,7 +665,7 @@
 
 	$effect(() => {
 		// Tab Ringkasan memuat hasil agent saat dibuka / brief berganti.
-		if (activeTab === 'ringkasan' && profileId) void loadSummaries();
+		if ((activeTab === 'ringkasan' || activeTab === 'entitas') && profileId) void loadSummaries();
 	});
 
 	onDestroy(() => {
@@ -2288,8 +2299,6 @@
 		return out;
 	}
 
-	// Simpan seluruh isian sekali jalan. Backend memvalidasi semua field dulu,
-	// lalu menulisnya dalam satu transaksi (tidak ada simpan separuh).
 	// Tombol "Pakai untuk Artikel": simpan brief ini sebagai brief aktif di server,
 	// supaya Pengelola Naskah memilihnya otomatis di tiap artikel. Tidak pindah
 	// halaman: pindah ke Kampanye adalah tombol terpisah.
@@ -2314,6 +2323,68 @@
 		}
 	}
 
+	function startEdit(key: string) {
+		editKey = key;
+		editValue = String(ringkasan[key] ?? '');
+	}
+	function cancelEdit() {
+		editKey = '';
+		editValue = '';
+	}
+	// Simpan satu isian lewat endpoint yang sama dengan Instan Brief. Mengosongkan
+	// isian tidak didukung di sini (Instan Brief juga melewati kolom kosong).
+	async function saveEdit() {
+		if (!editKey || editSaving) return;
+		const key = editKey;
+		const value = editValue.trim();
+		if (!value) {
+			showToast(tr('Isian tidak boleh kosong. Untuk mengubah arti isian, pakai obrolan Copilot.'), 'error');
+			return;
+		}
+		editSaving = true;
+		try {
+			const res = await apiRequest(`${briefBase}/fields/batch`, {
+				method: 'POST',
+				body: JSON.stringify({ fields: [{ key, value }] })
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menyimpan perubahan.')));
+			await hydrate();
+			cancelEdit();
+			showToast(tr('Perubahan tersimpan.'));
+			void loadSummaries(true);
+		} catch (e) {
+			showToast(e instanceof Error ? e.message : tr('Gagal menyimpan perubahan.'), 'error');
+		} finally {
+			editSaving = false;
+		}
+	}
+
+	// Ringkasan yang sudah siap tetapi bahan briefnya berubah sesudahnya.
+	const staleSummaryKinds = $derived(
+		summaries.filter((x) => x.status === 'ready' && x.stale).map((x) => x.kind)
+	);
+	async function refreshStaleSummaries() {
+		for (const kind of [...staleSummaryKinds]) await regenerateSummary(kind);
+	}
+
+	// "Buat artikel untuk ini" dari Target Pertanyaan AI: simpan topik, jadikan
+	// brief ini aktif, lalu buka daftar Kampanye. Daftar Kampanye menampilkan
+	// petunjuk, dan Pengelola Naskah mengisi topiknya sekali saja.
+	async function startArticleFromQuestion(question: string) {
+		try {
+			localStorage.setItem(
+				`tauthub:pending-topic:${brandId}`,
+				JSON.stringify({ topic: question, at: Date.now() })
+			);
+		} catch {
+			/* penyimpanan browser diblokir: topik tidak terbawa, sisanya tetap jalan */
+		}
+		await useBriefForArticles();
+		void goto(`/klien/${brandUrl}/campaigns`);
+	}
+
+	// Simpan seluruh isian sekali jalan. Backend memvalidasi semua field dulu,
+	// lalu menulisnya dalam satu transaksi (tidak ada simpan separuh).
 	async function saveInstanBrief() {
 		if (instanFormBusy) return;
 		if (!validateInstan()) {
@@ -3041,6 +3112,18 @@
 			</div>
 			</div>
 			</section>
+
+	{#snippet entityEditor(key: string)}
+		<textarea class="app-input w-full text-xs" rows="4" bind:value={editValue} aria-label={tr('Ubah isian')}></textarea>
+		{#if EDIT_HINT[key]}<p class="mt-1 text-[11px] text-muted-foreground">{tr(EDIT_HINT[key])}</p>{/if}
+		<div class="mt-2 flex gap-2">
+			<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" disabled={editSaving} onclick={() => void saveEdit()}>{editSaving ? tr('Menyimpan…') : tr('Simpan')}</button>
+			<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" disabled={editSaving} onclick={cancelEdit}>{tr('Batal')}</button>
+		</div>
+	{/snippet}
+	{#snippet editPencil(key: string)}
+		<button class="entity-edit-btn" type="button" aria-label={tr('Ubah isian')} title={tr('Ubah isian')} onclick={() => startEdit(key)}><Pencil size={12} /></button>
+	{/snippet}
 
 	{#snippet instanPane()}
 			<!-- Gerbang 2: isi template → unggah berkas → analisis. Reuse
@@ -3935,6 +4018,12 @@
 						</div>
 					</section>
 
+					{#if staleSummaryKinds.length > 0}
+						<div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs" style="border-color: color-mix(in srgb, var(--warning) 35%, transparent); background: var(--warning-soft); color: var(--warning);">
+							<span>{tr('Ringkasan belum diperbarui. Artikel gaya Yang Proper memakai ringkasan, jadi perubahan terbaru di brief ini belum ikut.')}</span>
+							<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" disabled={Boolean(summaryBusy)} onclick={() => void refreshStaleSummaries()}>{tr('Perbarui ringkasan')}</button>
+						</div>
+					{/if}
 					<div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
 						<div class="space-y-4">
 							<section class="app-card p-5">
@@ -3950,7 +4039,10 @@
 								<div class="mt-4 space-y-3">
 									{#each [['canonical_name', 'Nama resmi entitas'], ['entity_category', 'Kategori entitas'], ['canonical_description', 'Deskripsi resmi'], ['boilerplate', 'Teks "Tentang [brand]"']] as pair (pair[0])}
 										<div>
-											<p class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr(pair[1])}</p>
+											<div class="mb-1 flex items-center justify-between gap-2"><p class="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr(pair[1])}</p>{#if editKey !== pair[0] && pair[0] !== 'entity_category'}{@render editPencil(pair[0])}{/if}</div>
+											{#if editKey === pair[0]}
+												{@render entityEditor(pair[0])}
+											{:else}
 											<div class="rounded-xl border p-3" style="background: color-mix(in srgb, var(--muted) 60%, white); border-color: var(--border);">
 												{#if String(ringkasan[pair[0]] ?? '').trim()}
 													<p class="text-xs leading-relaxed">{ringkasan[pair[0]]}</p>
@@ -3958,6 +4050,7 @@
 													<p class="text-xs italic" style="color: var(--muted-foreground);">{tr('Belum diisi. Lengkapi lewat obrolan Copilot.')}</p>
 												{/if}
 											</div>
+											{/if}
 										</div>
 									{/each}
 								</div>
@@ -3978,8 +4071,11 @@
 										<div class="mb-2.5 flex items-center gap-2">
 											<span class="flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white" style="background: var(--success);"><Check size={12} strokeWidth={3} /></span>
 											<span class="text-xs font-bold uppercase tracking-wide" style="color: var(--success);">{tr('PILAR NARASI UTAMA (DIANJURKAN)')}</span>
+{#if editKey !== 'allowed_claims'}<span class="ml-auto">{@render editPencil('allowed_claims')}</span>{/if}
 										</div>
-										{#if items('allowed_claims').length > 0}
+										{#if editKey === 'allowed_claims'}
+	{@render entityEditor('allowed_claims')}
+{:else if items('allowed_claims').length > 0}
 											<ul class="list-disc space-y-2 pl-7 text-xs leading-relaxed">
 												{#each items('allowed_claims') as it (it)}
 													<li>{it}</li>
@@ -4022,7 +4118,10 @@
 								<div class="mt-4 space-y-3">
 									{#each [['official_facts', 'Fakta resmi (tahun, jumlah, lokasi)'], ['usp', 'Keunggulan unik (USP)'], ['key_facts', 'Fakta penting yang wajib dipertahankan'], ['region', 'Wilayah operasional'], ['website', 'Website resmi (canonical domain)']] as pair (pair[0])}
 										<div>
-											<p class="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr(pair[1])}</p>
+											<div class="mb-1 flex items-center justify-between gap-2"><p class="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr(pair[1])}</p>{#if editKey !== pair[0] && pair[0] !== 'entity_category'}{@render editPencil(pair[0])}{/if}</div>
+											{#if editKey === pair[0]}
+												{@render entityEditor(pair[0])}
+											{:else}
 											<div class="rounded-xl border p-3" style="background: color-mix(in srgb, var(--muted) 60%, white); border-color: var(--border);">
 												{#if String(ringkasan[pair[0]] ?? '').trim()}
 													<p class="text-xs leading-relaxed">{ringkasan[pair[0]]}</p>
@@ -4030,6 +4129,7 @@
 													<p class="text-xs italic" style="color: var(--muted-foreground);">{tr('Belum diisi. Lengkapi lewat obrolan Copilot.')}</p>
 												{/if}
 											</div>
+											{/if}
 										</div>
 									{/each}
 								</div>
@@ -4046,13 +4146,17 @@
 									</div>
 								</div>
 								<div class="mt-4 space-y-2.5">
-									{#if items('target_questions').length > 0}
+									{#if editKey !== 'target_questions'}<div class="flex justify-end">{@render editPencil('target_questions')}</div>{/if}
+{#if editKey === 'target_questions'}
+	{@render entityEditor('target_questions')}
+{:else if items('target_questions').length > 0}
 										{#each items('target_questions') as q (q)}
 											<div class="flex items-center justify-between gap-3 rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 60%, white);">
 												<span class="flex min-w-0 items-center gap-2.5">
 													<span class="flex-shrink-0 text-xs font-bold" style="color: var(--primary);">›</span>
 													<span class="truncate text-xs font-medium">{q}</span>
 												</span>
+											<span class="flex flex-shrink-0 items-center gap-2">
 												<span
 													class="inline-flex flex-shrink-0 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold"
 													style="background: {isFilled('target_questions') ? 'var(--success-soft)' : 'var(--secondary)'}; color: {isFilled('target_questions') ? 'var(--success)' : 'var(--muted-foreground)'};"
@@ -4060,6 +4164,8 @@
 													<span class="h-1.5 w-1.5 rounded-full" style="background: {isFilled('target_questions') ? 'var(--success)' : 'var(--muted-foreground)'};"></span>
 													{isFilled('target_questions') ? tr('Sinyal Siap') : tr('Belum terverifikasi')}
 												</span>
+												<button class="app-btn app-btn-soft !min-h-7 !px-2 !text-[11px]" type="button" onclick={() => void startArticleFromQuestion(q)}>{tr('Buat artikel')}</button>
+											</span>
 											</div>
 										{/each}
 									{:else}
@@ -4082,8 +4188,10 @@
 								</div>
 								<div class="mt-4 space-y-4">
 									<div>
-										<p class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Nama alternatif atau alias')}</p>
-										{#if listItems('preferred_terms').length > 0}
+										<div class="mb-1.5 flex items-center justify-between gap-2"><p class="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Nama alternatif atau alias')}</p>{#if editKey !== 'preferred_terms'}{@render editPencil('preferred_terms')}{/if}</div>
+										{#if editKey === 'preferred_terms'}
+	{@render entityEditor('preferred_terms')}
+{:else if listItems('preferred_terms').length > 0}
 											<div class="flex flex-wrap gap-1.5">
 												{#each listItems('preferred_terms') as t (t)}
 													<span class="rounded-full border px-2.5 py-1 text-xs" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 60%, white);">{t}</span>
@@ -4094,8 +4202,10 @@
 										{/if}
 									</div>
 									<div>
-										<p class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Kanal resmi')}</p>
-										{#if listItems('canonical_links').length > 0}
+										<div class="mb-1.5 flex items-center justify-between gap-2"><p class="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Kanal resmi')}</p>{#if editKey !== 'canonical_links'}{@render editPencil('canonical_links')}{/if}</div>
+										{#if editKey === 'canonical_links'}
+	{@render entityEditor('canonical_links')}
+{:else if listItems('canonical_links').length > 0}
 											<ul class="space-y-1.5">
 												{#each listItems('canonical_links') as u (u)}
 													<li class="truncate text-xs">
@@ -4112,8 +4222,10 @@
 										{/if}
 									</div>
 									<div>
-										<p class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Keyword prioritas dan URL target')}</p>
-										{#if keywordPairs().length > 0}
+										<div class="mb-1.5 flex items-center justify-between gap-2"><p class="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{tr('Keyword prioritas dan URL target')}</p>{#if editKey !== 'target_keywords_urls'}{@render editPencil('target_keywords_urls')}{/if}</div>
+										{#if editKey === 'target_keywords_urls'}
+	{@render entityEditor('target_keywords_urls')}
+{:else if keywordPairs().length > 0}
 											<div class="space-y-1.5">
 												{#each keywordPairs() as kp, ki (kp.keyword + ki)}
 													<div class="flex items-center justify-between gap-3 rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--muted) 60%, white);">
@@ -6352,6 +6464,12 @@
 		.brief-marquee > :global(.brief-marquee-run) { animation: none; }
 	}
 	/* Persen progres field wajib di tiap baris brief (panel melayang + rail kiri). */
+	.entity-edit-btn {
+		display: inline-flex; align-items: center; justify-content: center;
+		width: 24px; height: 24px; border-radius: 6px; border: 0; background: transparent;
+		color: var(--muted-foreground); cursor: pointer;
+	}
+	.entity-edit-btn:hover { background: var(--secondary); color: var(--foreground); }
 	.brief-active-badge {
 		flex-shrink: 0;
 		padding: 1px 6px;
