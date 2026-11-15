@@ -69,6 +69,9 @@
 	// Sidebar brief = riwayat brief milik brand ini. Nantinya diisi onMount.
 	let briefs = $state<BriefListItem[]>([]);
 	let briefSearch = $state('');
+	/** Brief aktif milik pengguna ini (dipilih otomatis di Pengelola Naskah). */
+	let activeBriefId = $state('');
+	let activeSaving = $state(false);
 	let sidebarOpen = $state(false);
 	let searchOpen = $state(false);
 	let menuId = $state<string | null>(null);
@@ -709,6 +712,16 @@
 			updated_at: p.updated_at ?? null,
 			progress: p.progress ?? null
 		}));
+		// Brief aktif hanya penanda; gagal memuatnya tidak boleh mengganggu halaman.
+		try {
+			const ar = await apiRequest(`${apiBase}/active-brief`);
+			if (ar.ok) {
+				const a = await ar.json().catch(() => null);
+				activeBriefId = typeof a?.profile_id === 'string' ? a.profile_id : '';
+			}
+		} catch {
+			/* abaikan */
+		}
 	}
 
 	async function hydrate() {
@@ -2278,23 +2291,27 @@
 	// Simpan seluruh isian sekali jalan. Backend memvalidasi semua field dulu,
 	// lalu menulisnya dalam satu transaksi (tidak ada simpan separuh).
 	// Tombol "Pakai untuk Artikel": simpan brief ini sebagai brief aktif di server,
-	// supaya Pengelola Naskah memilihnya otomatis di tiap artikel. Kegagalan
-	// menyimpan tidak menghalangi pindah halaman.
+	// supaya Pengelola Naskah memilihnya otomatis di tiap artikel. Tidak pindah
+	// halaman: pindah ke Kampanye adalah tombol terpisah.
 	async function useBriefForArticles() {
+		if (activeSaving || activeBriefId === profileId) return;
+		activeSaving = true;
 		try {
 			const res = await apiRequest(`${apiBase}/active-brief`, {
 				method: 'PUT',
 				body: JSON.stringify({ profile_id: profileId })
 			});
 			if (res.ok) {
+				activeBriefId = profileId;
 				showToast(tr('Brief ini akan dipilih otomatis di Pengelola Naskah.'));
 			} else {
 				showToast(await readApiError(res, tr('Brief belum bisa dijadikan brief aktif.')), 'error');
 			}
 		} catch {
 			showToast(tr('Brief belum bisa dijadikan brief aktif.'), 'error');
+		} finally {
+			activeSaving = false;
 		}
-		void goto(`/klien/${brandUrl}/campaigns`);
 	}
 
 	async function saveInstanBrief() {
@@ -2723,6 +2740,7 @@
 								{/if}
 							</a>
 							<span class="brief-pct">{briefPct(b)}%</span>
+							{#if b.id === activeBriefId}<span class="brief-active-badge">{tr('Aktif')}</span>{/if}
 							<button
 								class="brief-pin"
 								class:pinned={b.pinned}
@@ -2845,9 +2863,12 @@
 						</button>
 						<button
 							class="app-btn app-btn-primary !min-h-8 !min-w-8 !p-1"
+							class:brief-active-btn={activeBriefId === profileId}
 							type="button"
-							aria-label={tr('Pakai untuk Artikel')}
-							title={tr('Pakai untuk Artikel')}
+							aria-label={activeBriefId === profileId ? tr('Brief aktif') : tr('Pakai untuk Artikel')}
+							title={activeBriefId === profileId ? tr('Brief aktif') : tr('Pakai untuk Artikel')}
+							aria-pressed={activeBriefId === profileId}
+							disabled={activeSaving}
 							onclick={() => void useBriefForArticles()}
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true">
@@ -2855,11 +2876,37 @@
 								<path fill="currentColor" d="M13 2.5a1.5 1.5 0 0 1 3 0v11a1.5 1.5 0 0 1-3 0v-.214c-2.162-1.241-4.49-1.843-6.912-2.083l.405 2.712A1 1 0 0 1 5.51 15.1h-.548a1 1 0 0 1-.916-.599l-1.85-3.49l-.202-.003A2.014 2.014 0 0 1 0 9V7a2.02 2.02 0 0 1 1.992-2.013a75 75 0 0 0 2.483-.075c3.043-.154 6.148-.849 8.525-2.199zm1 0v11a.5.5 0 0 0 1 0v-11a.5.5 0 0 0-1 0m-1 1.35c-2.344 1.205-5.209 1.842-8 2.033v4.233q.27.015.537.036c2.568.189 5.093.744 7.463 1.993zm-9 6.215v-4.13a95 95 0 0 1-1.992.052A1.02 1.02 0 0 0 1 7v2c0 .55.448 1.002 1.006 1.009A61 61 0 0 1 4 10.065m-.657.975l1.609 3.037l.01.024h.548l-.002-.014l-.443-2.966a68 68 0 0 0-1.722-.082z" />
 							</svg>
 						</button>
+						<button
+							class="app-btn app-btn-soft !min-h-8 !min-w-8 !p-1"
+							type="button"
+							aria-label={tr('Buka Kampanye')}
+							title={tr('Buka Kampanye')}
+							onclick={() => void goto(`/klien/${brandUrl}/campaigns`)}
+						>
+							<ArrowRight size={14} />
+						</button>
 					{:else}
 						<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => void saveRingkasan()}>{tr('Simpan Draf')}</button>
-						<button class="app-btn app-btn-primary !min-h-8 !text-xs" type="button" onclick={() => void useBriefForArticles()}>
-							{tr('Pakai untuk Artikel')}<ArrowRight size={14} />
+						<button
+							class="app-btn app-btn-primary !min-h-8 !text-xs"
+							class:brief-active-btn={activeBriefId === profileId}
+							type="button"
+							aria-pressed={activeBriefId === profileId}
+							disabled={activeSaving}
+							onclick={() => void useBriefForArticles()}
+						>
+							{#if activeBriefId === profileId}
+								<Check size={14} />{tr('Brief aktif')}
+							{:else}
+								{tr('Pakai untuk Artikel')}
+							{/if}
 						</button>
+						<button class="app-btn app-btn-soft !min-h-8 !text-xs" type="button" onclick={() => void goto(`/klien/${brandUrl}/campaigns`)}>
+							{tr('Buka Kampanye')}<ArrowRight size={14} />
+						</button>
+						{#if activeBriefId === profileId}
+							<span class="brief-active-note">{tr('Terpilih otomatis di Pengelola Naskah (gaya Yang Proper).')}</span>
+						{/if}
 					{/if}
 					{/if}
 					<button
@@ -3355,6 +3402,7 @@
 												>
 														<span class="brief-marquee" use:marqueeOnHover title={b.name}><span>{b.name}</span></span>
 														<span class="brief-pct">{briefPct(b)}%</span>
+														{#if b.id === activeBriefId}<span class="brief-active-badge">{tr('Aktif')}</span>{/if}
 												</a>
 												<button
 													class="brief-pop-icon brief-pop-pin"
@@ -6304,6 +6352,24 @@
 		.brief-marquee > :global(.brief-marquee-run) { animation: none; }
 	}
 	/* Persen progres field wajib di tiap baris brief (panel melayang + rail kiri). */
+	.brief-active-badge {
+		flex-shrink: 0;
+		padding: 1px 6px;
+		border-radius: 9999px;
+		font-size: 10.5px;
+		font-weight: 600;
+		background: var(--success-soft);
+		color: var(--success);
+	}
+	.app-btn.brief-active-btn {
+		background: var(--success-soft);
+		color: var(--success);
+	}
+	.brief-active-note {
+		align-self: center;
+		font-size: 11.5px;
+		color: var(--muted-foreground);
+	}
 	.brief-pct {
 		flex-shrink: 0;
 		font-size: 11.5px;

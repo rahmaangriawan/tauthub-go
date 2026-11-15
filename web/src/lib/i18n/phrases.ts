@@ -6154,6 +6154,8 @@ export const PHRASE_EN: Record<string, string> = {
   "Artikel ini perlu ditinjau lebih dulu sebelum bisa terbit. Tim kami akan menghubungi Anda.": "This article needs a review before it can be published. Our team will contact you.",
   "Naskah artikel tidak ditemukan. Silakan hubungi dukungan.": "The article draft could not be found. Please contact support.",
   "Artikel belum bisa diterbitkan. Tim kami sedang menindaklanjuti.": "The article could not be published yet. Our team is following up.",
+  "Brief aktif": "Active brief",
+  "Terpilih otomatis di Pengelola Naskah (gaya Yang Proper).": "Selected automatically in the Article Manager (Yang Proper style).",
 	};
 
 /**

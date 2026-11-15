@@ -21,11 +21,12 @@ Browser Anda mengingat tab yang terakhir Anda buka, untuk tiap brief. Setelah ha
 | **Brand Brief & Entity Builder** dan lencana **Beta** | Judul halaman. Lencana **Beta** menandai fitur yang masih dikembangkan. |
 | Tombol panah **Perluas header** atau **Ciutkan header** | Menampilkan atau menyembunyikan teks penjelasan di bawah judul. Awalnya header dalam keadaan ciut. |
 | **Simpan Draf** | Isian dari obrolan dan formulir tersimpan sendiri, jadi Anda tidak perlu menekannya. Kalau tidak ada perubahan yang perlu disimpan, muncul pesan **Belum ada perubahan.** |
-| **Pakai untuk Artikel** | Menjadikan brief ini brief aktif Anda, lalu membuka halaman **Kampanye**. Di Pengelola Naskah, brief aktif terpilih otomatis pada gaya **Yang Proper**. Brief tidak dikirim ke kampanye mana pun. |
+| **Pakai untuk Artikel** | Menjadikan brief ini brief aktif Anda tanpa pindah halaman. Tombolnya berubah menjadi **Brief aktif** dan muncul keterangan bahwa brief ini terpilih otomatis di Pengelola Naskah pada gaya **Yang Proper**. Untuk mengganti, buka brief lain lalu tekan tombol yang sama. Brief tidak dikirim ke kampanye mana pun. |
+| **Buka Kampanye** | Membuka halaman **Kampanye**. Tombol ini hanya pindah halaman dan tidak mengubah brief aktif. |
 | Chip **Beta** | Klik untuk membaca keterangannya: fitur ini masih dikembangkan, isi dan tampilannya bisa berubah, dan mungkin masih ada bagian yang belum sempurna. Untuk menutup, klik di luar kotak keterangan. |
 | **Sinkronisasi Terakhir** | Waktu terakhir data brief dimuat atau Tubi membalas. Tampilannya: **Menunggu data**, **Baru saja**, atau selisih menit dan jam. |
 
-Saat header ciut, **Simpan Draf** dan **Pakai untuk Artikel** tampil sebagai ikon. Nama tombol muncul sebagai keterangan saat kursor ada di atas ikon. Kedua tombol tidak tampil di tab **Media** dan **Ringkasan**.
+Saat header ciut, **Simpan Draf** dan **Pakai untuk Artikel** dan **Buka Kampanye** tampil sebagai ikon. Nama tombol muncul sebagai keterangan saat kursor ada di atas ikon. Kedua tombol tidak tampil di tab **Media** dan **Ringkasan**.
 
 ### Lima tab
 
