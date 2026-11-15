@@ -487,6 +487,8 @@ func run() error {
 			// Pustaka gambar AI per artikel (isolasi brand+campaign+media).
 			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/images", resolveCampaign(brandFlowDeps.ArticleImagesList))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/generate", resolveCampaign(brandFlowDeps.ArticleImageGenerate))
+			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/writer-batches", resolveCampaign(brandFlowDeps.TautWriterBatchCreate))
+			authed.Get("/brands/{brandId}/taut/campaigns/{campaignId}/writer-batches/active", resolveCampaign(brandFlowDeps.TautWriterBatchActive))
 			authed.Post("/brands/{brandId}/taut/campaigns/{campaignId}/images/upload", resolveCampaign(brandFlowDeps.ArticleImageUpload))
 			authed.Delete("/brands/{brandId}/taut/campaigns/{campaignId}/images/{imageId}", resolveCampaign(brandFlowDeps.ArticleImageDelete))
 

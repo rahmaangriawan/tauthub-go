@@ -22,7 +22,7 @@ Bila sebuah media punya lebih dari satu artikel, jumlah artikel ikut tampil, mis
 
 ### Banner dan kartu informasi
 
-Banner memuat judul, teks biaya, tombol **Generate Semua**, dan label nama kampanye. Dua kartu informasi bisa muncul di bawahnya:
+Banner memuat judul, teks biaya, tombol **Generate Semua**, tombol **Buat semua cover** (bila ada artikel tanpa cover), dan label nama kampanye. Dua kartu informasi bisa muncul di bawahnya:
 
 - **Kutipan Narasumber (dari The Profiler)** muncul bila kampanye punya narasumber. AI memakai kutipan itu di artikel semua media terpilih, paling sedikit satu kutipan lengkap dengan nama dan jabatan.
 - **Mode Pelacakan & Anchor Text** muncul bila kampanye punya target tautan utama. Lihat bagian khusus di bawah.
@@ -101,7 +101,41 @@ Media hanya dilepas dari kampanye. Media tidak dihapus selamanya. Bila media pun
 
 ### Cara memilih beberapa artikel
 
-Centang kotak di baris artikel atau di header media. Bar **N media dipilih** muncul dengan tombol **Pilih Semua** atau **Batal Pilih Semua**. Tombol **Generate Semua** di banner aktif bila Anda memilih sedikitnya dua artikel. Fitur ini belum tersedia. Bila Anda mengklik tombol itu, yang muncul hanya pemberitahuan bahwa pembuatan artikel di semua media terpilih masih dikerjakan. Buat artikel satu per satu, atau pakai **Buat N artikel** untuk satu media.
+Centang kotak di baris artikel atau di header media. Bar **N media dipilih** muncul dengan tombol **Pilih Semua** atau **Batal Pilih Semua**, **Generate terpilih**, **Buat cover terpilih**, dan **Hapus terpilih**.
+
+### Cara membuat banyak artikel sekaligus (Generate Semua)
+
+1. Klik **Generate Semua** di banner (atau **Generate terpilih** di bar seleksi). Tanpa centang, yang diproses semua media yang belum punya artikel. Dengan centang, hanya yang dicentang.
+2. Di panel yang terbuka, isi **Topik atau konteks** (boleh kosong, topik diambil dari brief), pilih **Gaya**, dan untuk gaya **Yang Proper** pilih **Brief** (brief aktif Anda terpilih otomatis). Panel menampilkan rincian biaya, misalnya "3 artikel × 2.000".
+3. Klik **Jalankan**.
+
+Antrean berjalan di server, jadi halaman boleh ditutup. Di atas daftar tampil hitungan seperti "2 dari 3 selesai", dan tiap baris menunjukkan statusnya (**Antre**, sedang menulis, atau alasan kalau belum berhasil). Saat semuanya selesai, notifikasi lonceng memberi tahu.
+
+Aturan antrean:
+
+- Paling banyak 30 artikel per antrean, dan satu antrean aktif per brand. Antrean kedua baru bisa dimulai setelah yang pertama selesai.
+- Kredit dipotong per artikel setelah artikel itu berhasil dibuat. Artikel yang gagal tidak ditagih dan bisa dicoba lagi dari barisnya.
+- Saldo dicek di muka untuk seluruh antrean. Kalau kurang, antrean tidak dimulai.
+- Artikel yang sudah terbit atau terjadwal dilewati.
+
+### Cara membuat cover untuk banyak artikel
+
+Klik **Buat semua cover** di banner (muncul bila ada artikel tanpa cover), atau centang artikel lalu **Buat cover terpilih**. Cover dibuat dari judul tiap artikel dan ditagih sebesar tarif gambar AI per cover, setelah berhasil. Jalannya sama dengan antrean artikel.
+
+### Cara memakai artikel untuk media lain
+
+Pada artikel yang sudah ada isinya, klik ikon **Pakai untuk media lain**. Pilih media tujuan yang masih kosong di panel, lalu **Jalankan**.
+
+- Tauthub menulis artikel baru untuk tiap media dengan **topik, sudut, gaya, brief, dan fakta yang sama** dengan artikel asal, tetapi kalimat dan susunannya berbeda, supaya tidak dianggap konten duplikat.
+- Fakta, angka, nama, dan kutipan tidak berubah. Judul, pembuka, urutan, dan kalimat ditulis ulang.
+- Setelah ditulis, hasilnya dibandingkan dengan artikel asal. Kalau terlalu mirip, Tauthub menulis ulang sekali. Kalau masih mirip, artikel tetap disimpan dengan tanda **Mirip artikel asal** di barisnya. Sebaiknya Anda mengedit artikel itu sebelum terbit.
+- Biaya per artikel lebih murah daripada penulisan biasa (tarifnya tertera di panel) dan tampil sebagai baris **Artikel untuk media lain** di rincian TOTAL TAGIHAN AKHIR.
+- Baris artikel turunan memuat keterangan "Dari artikel <nama media asal>".
+- Kalau artikel asal Anda tulis atau unggah sendiri, panel menampilkan peringatan: konten yang dipakai berulang di beberapa media bisa ditolak oleh mitra, dan sebaiknya Anda menulis ulang sendiri untuk tiap media. Anda tetap bisa melanjutkan setelah mencentang pernyataan di panel.
+
+### Cara menghapus beberapa artikel
+
+Centang artikel, klik **Hapus terpilih**, lalu konfirmasi. Naskah yang sudah ada ikut terhapus dan tidak bisa dikembalikan. Artikel yang sudah terbit atau terjadwal dilewati.
 
 ## Bar bawah
 
@@ -109,7 +143,7 @@ Bar bawah selalu terlihat. Isinya:
 
 - **Kembali** ke Katalog Media.
 - Kotak **TOTAL TAGIHAN AKHIR**. Arahkan kursor atau klik untuk melihat **Rincian biaya**. Penjelasannya ada di [Tagihan di Penyedia Konten](20-tagihan-di-penyedia-konten.md).
-- Pesan status QC (hanya di layar lebar): "QC sudah lulus" atau "QC belum lulus. Klik Lanjut Tinjau & Terbit untuk melihat apa yang kurang."
+- Ringkasan kekurangan (hanya di layar lebar): misalnya "Artikel belum dibuat (3) · Cover belum ada (3)". Klik satu kelompok untuk menggulir ke baris pertamanya, yang disorot sebentar. Kalau tidak ada kekurangan, tertulis "QC sudah lulus". Klik **Lanjut Tinjau & Terbit** untuk rincian prasyarat lengkap.
 - Tombol **Lanjut Tinjau & Terbit**.
 
 ## Mode Pelacakan & Anchor Text

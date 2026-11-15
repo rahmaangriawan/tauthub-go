@@ -69,6 +69,16 @@ func (d *Deps) tautReferenceMaterial(ctx context.Context, campaign bsRow, campai
 			hasFacts = true
 		}
 	}
+	// Artikel turunan: teks artikel asal ikut jadi bahan, supaya Checker tidak
+	// menandai fakta yang memang berasal dari sana sebagai klaim tanpa dasar.
+	if src, _ := d.queryRow(ctx,
+		"SELECT derived_source_text FROM taut_campaign_media WHERE campaign_id = $1 AND media_id = $2 AND slot = $3 LIMIT 1",
+		campaignID, mediaID, slot); src != nil {
+		if t := strings.TrimSpace(src.strOr("derived_source_text", "")); t != "" {
+			text = strings.TrimSpace(text + "\n\n[RUJUKAN FAKTA DARI ARTIKEL MEDIA LAIN]\n" + t)
+			hasFacts = true
+		}
+	}
 	return text, hasFacts, nil
 }
 

@@ -34,6 +34,9 @@ func (d *Deps) RegisterJobs() {
 		}
 		return d.PublicationLinkCheckJob(ctx, pubID)
 	})
+	jobs.Register(writerItemJobKind, func(ctx context.Context, job jobs.JobRow) error {
+		return d.TautWriterItemJob(ctx, job.Payload)
+	})
 	jobs.Register("monthly_report_email", func(ctx context.Context, job jobs.JobRow) error {
 		return d.monthlyReportJob(ctx, job)
 	})

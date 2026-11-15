@@ -201,7 +201,8 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 		rateIDR = 1
 	}
 	items, err := d.queryRows(ctx,
-		`SELECT tcm.id AS placement_id, tcm.media_id, tcm.slot, COALESCE(tcm.round, 1) AS round, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
+		`SELECT tcm.id AS placement_id, tcm.derived_from_media_id, tcm.derived_similarity,
+		        (SELECT dm.name FROM media dm WHERE dm.id = tcm.derived_from_media_id) AS derived_from_name, tcm.media_id, tcm.slot, COALESCE(tcm.round, 1) AS round, m.name, m.media_type, m.website_url, tcm.status, tcm.article_status, tcm.match_reason, tcm.ai_score, tcm.match_rank,
 			        m.credit_cost, m.allow_hyperlink, m.max_links, m.link_duration_months, m.allow_embed, m.label_sponsor, m.word_count_mode, tcm.regen_count, tcm.angle_slug,
 		        COALESCE(tcm.price, m.price, 0) AS price,
 		        pub.id AS publication_id, pub.status AS publication_status, pub.scheduled_at AS publication_scheduled_at,
@@ -261,6 +262,9 @@ func (d *Deps) listPlacement(ctx context.Context, campaignID, brandID string) ([
 			// placement_id = identitas satu slot artikel. Dipakai frontend sebagai
 			// kunci per-artikel; media_id tetap untuk metadata & harga.
 			"placement_id":         i.strOr("placement_id", ""),
+			"derived_from_media_id": i.raw("derived_from_media_id"),
+			"derived_from_name":     i.raw("derived_from_name"),
+			"derived_similarity":    i.raw("derived_similarity"),
 			"slot":                 i.intOr("slot", 1),
 			"media_id":             mediaID,
 			"name":                 name,

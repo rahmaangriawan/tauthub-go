@@ -30,6 +30,11 @@ Catatan:
 - **Peringatan ringkasan belum diperbarui**: kalau kamu mengubah brief setelah ringkasannya dibuat, muncul peringatan dan tombol untuk memperbaruinya, supaya artikel memakai isi brief yang terbaru.
 - **Buat artikel dari Target Pertanyaan AI**: tombol di tiap pertanyaan membawa topiknya ke Pengelola Naskah.
 - **Cek kata terlarang**: kata atau frasa yang kamu larang di brief sekarang diperiksa langsung di Cek Validasi, dan artikel yang memuatnya diminta direvisi.
+- **Generate Semua yang sungguhan**: tulis banyak artikel sekaligus. Dikerjakan di server, jadi halaman boleh ditutup, dan kamu mendapat notifikasi saat selesai. Kredit dipotong per artikel setelah berhasil.
+- **Buat semua cover**: cover AI untuk semua artikel yang belum punya, dibuat dari judul artikel.
+- **Pakai untuk media lain**: dari satu artikel, Tauthub menulis versi untuk media lain dengan topik dan fakta yang sama tetapi kalimat dan susunan berbeda, supaya tidak dianggap duplikat. Biayanya lebih murah dan tampil di Total Tagihan Akhir.
+- **Ringkasan kekurangan di bilah bawah**: halaman Penyedia Konten kini menyebut langsung apa yang kurang (misalnya artikel atau cover), dan satu klik membawamu ke barisnya.
+- **Aksi massal**: generate, buat cover, dan hapus untuk artikel yang dicentang.
 
 ### Perbaikan
 - Tab Entitas sekarang menampilkan nama alternatif, kanal resmi, serta keyword dan URL target yang sudah kamu isi.

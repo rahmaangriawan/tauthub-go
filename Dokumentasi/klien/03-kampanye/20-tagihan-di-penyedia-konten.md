@@ -31,8 +31,9 @@ Arahkan kursor ke kotak total untuk membuka jendela kecil **Rincian biaya**. Kli
 |---|---|
 | **Biaya media** | Jumlah artikel dan total biaya pemasangannya |
 | **Biaya penulisan AI** | Jumlah penulisan yang sudah ditagih, ditulis "N × tarif". Bila belum ada, tertulis "belum memakai AI" |
-| **Biaya gambar AI** | Jumlah gambar yang sudah ditagih, ditulis "N × tarif" |
-| **TOTAL TAGIHAN AKHIR** | Jumlah dari tiga baris di atas |
+| **Biaya gambar AI** | Jumlah gambar yang sudah ditagih, ditulis "N × tarif" (termasuk cover dari **Buat semua cover**) |
+| **Artikel untuk media lain** | Hanya muncul bila Anda sudah memakai **Pakai untuk media lain**. Jumlah artikel turunan yang sudah ditagih, ditulis "N × tarif". Tarifnya lebih murah daripada penulisan biasa |
+| **TOTAL TAGIHAN AKHIR** | Jumlah dari baris-baris di atas |
 
 Pada baris penulisan, keterangan seperti "(5 artikel + 2 tulis ulang)" berarti ada 5 penulisan yang ditagih. Dua di antaranya adalah tulis ulang. Angka pertama sudah termasuk tulis ulang.
 

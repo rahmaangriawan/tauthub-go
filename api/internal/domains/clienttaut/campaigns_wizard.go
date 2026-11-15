@@ -290,20 +290,22 @@ func (d *Deps) TautBudgetEstimate(w http.ResponseWriter, r *http.Request) {
 // bar biaya writer supaya uang yang tampil adalah yang benar-benar keluar:
 // klien yang menulis atau mengunggah artikelnya sendiri tidak melihat biaya
 // penulisan AI sama sekali.
-func (d *Deps) tautCampaignCharges(ctx context.Context, campaignID string) (writerTC, writerN, writerRegenN, imageTC, imageN int) {
+func (d *Deps) tautCampaignCharges(ctx context.Context, campaignID string) (writerTC, writerN, writerRegenN, imageTC, imageN, derivedTC, derivedN int) {
 	row, err := d.queryRow(ctx, `
 		SELECT
 		  COALESCE(-SUM(amount_tc) FILTER (WHERE ref_id LIKE 'taut-writer:%' OR ref_id LIKE 'taut-writer-regen:%'), 0) AS writer_tc,
 		  COUNT(*) FILTER (WHERE ref_id LIKE 'taut-writer:%') AS writer_n,
 		  COUNT(*) FILTER (WHERE ref_id LIKE 'taut-writer-regen:%') AS writer_regen_n,
 		  COALESCE(-SUM(amount_tc) FILTER (WHERE ref_id LIKE 'ai-image:%'), 0) AS image_tc,
-		  COUNT(*) FILTER (WHERE ref_id LIKE 'ai-image:%') AS image_n
+		  COUNT(*) FILTER (WHERE ref_id LIKE 'ai-image:%') AS image_n,
+		  COALESCE(-SUM(amount_tc) FILTER (WHERE ref_id LIKE 'taut-writer-derived:%'), 0) AS derived_tc,
+		  COUNT(*) FILTER (WHERE ref_id LIKE 'taut-writer-derived:%') AS derived_n
 		FROM credit_ledger_entries
 		WHERE split_part(ref_id, ':', 2) = $1`, campaignID)
 	if err != nil {
-		return 0, 0, 0, 0, 0
+		return 0, 0, 0, 0, 0, 0, 0
 	}
-	return row.intOr("writer_tc", 0), row.intOr("writer_n", 0), row.intOr("writer_regen_n", 0), row.intOr("image_tc", 0), row.intOr("image_n", 0)
+	return row.intOr("writer_tc", 0), row.intOr("writer_n", 0), row.intOr("writer_regen_n", 0), row.intOr("image_tc", 0), row.intOr("image_n", 0), row.intOr("derived_tc", 0), row.intOr("derived_n", 0)
 }
 
 // TautPlacementGet: GET /v1/brands/{brandId}/taut/campaigns/{campaignId}/placement
@@ -333,7 +335,7 @@ func (d *Deps) TautPlacementGet(w http.ResponseWriter, r *http.Request) {
 	if rt, rtErr := ai.LoadAIRuntime(r.Context(), d.Pool); rtErr == nil {
 		imageCost = ai.ImageCreditCost(rt)
 	}
-	writerTC, writerN, writerRegenN, imageTC, imageN := d.tautCampaignCharges(r.Context(), campaignID)
+	writerTC, writerN, writerRegenN, imageTC, imageN, derivedTC, derivedN := d.tautCampaignCharges(r.Context(), campaignID)
 	// has_brief: modal "Buat N artikel" memakainya untuk memutuskan apakah
 	// perlu menampilkan blok konteks. Kampanye tanpa hasil Profiler tidak punya
 	// bahan apa pun selain profil media, jadi topik tidak boleh dibiarkan kosong.
@@ -358,6 +360,9 @@ func (d *Deps) TautPlacementGet(w http.ResponseWriter, r *http.Request) {
 		"writer_regen_count":  writerRegenN,
 		"image_charged_tc":    imageTC,
 		"image_charge_count":  imageN,
+		"derived_charged_tc":   derivedTC,
+		"derived_charge_count": derivedN,
+		"writer_derivative_cost_credits": d.derivativeCreditCost(r.Context()),
 	})
 }
 

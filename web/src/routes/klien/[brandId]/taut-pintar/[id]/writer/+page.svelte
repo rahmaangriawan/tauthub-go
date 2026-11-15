@@ -62,6 +62,10 @@
 		category_required?: boolean;
 		/** 'ai' bila artikel pernah dibuat The Writer; 'manual' bila diunggah. */
 		article_source?: 'ai' | 'manual' | null;
+		/** Artikel turunan: media asal, namanya, dan skor kemiripan (0 sampai 1). */
+		derived_from_media_id?: string | null;
+		derived_from_name?: string | null;
+		derived_similarity?: number | string | null;
 		/** Aturan panjang artikel media (mis. kata_300_700 / custom_500_1000). */
 		word_count_mode?: string | null;
 		/** Nomor artikel pada media ini (1 = artikel pertama). */
@@ -149,6 +153,11 @@
 	let writerChargeCount = $state(0);
 	let writerRegenCount = $state(0);
 	let imageChargeCount = $state(0);
+	/** Artikel turunan: tarif per artikel, jumlah yang sudah ditagih, dan kreditnya. */
+	let derivativeCostCredits = $state(1500);
+	let derivedChargeCount = $state(0);
+	let derivedChargedTC = $state(0);
+	let wbBooted = false;
 	let trackingOn = $state(false);
 	let genState = $state<Record<string, string>>({});
 	let bulkRunning = $state(false);
@@ -335,6 +344,224 @@
 			window.removeEventListener('keydown', onKey);
 		};
 	});
+
+	// ── Antrean server: Generate Semua, cover massal, artikel turunan ─────────
+	// Dikerjakan di server (satu job per artikel), jadi halaman boleh ditutup.
+	// Layar hanya membaca status selama antrean aktif.
+	type WbKind = 'article' | 'cover' | 'derived';
+	type WbItem = {
+		media_id: string;
+		slot: number;
+		status: 'queued' | 'running' | 'done' | 'failed';
+		error_message?: string | null;
+		similarity?: number | string | null;
+	};
+	type WbInfo = {
+		id: string;
+		kind: WbKind;
+		status: 'queued' | 'running' | 'done' | 'failed';
+		total: number;
+		done: number;
+		failed: number;
+		items: WbItem[];
+	};
+	const WB_TITLE: Record<WbKind, string> = {
+		article: 'Menulis artikel',
+		cover: 'Membuat cover',
+		derived: 'Membuat artikel untuk media lain'
+	};
+	let wb = $state<WbInfo | null>(null);
+	let wbDismissed = $state('');
+	let wbTimer: ReturnType<typeof setTimeout> | null = null;
+	let wbSeen = 0;
+	const wbActive = $derived(wb !== null && (wb.status === 'queued' || wb.status === 'running'));
+	const wbVisible = $derived(wb !== null && wb.id !== wbDismissed);
+	// Selama antrean berjalan, tombol generate manual dikunci (sama seperti bulk lama).
+	$effect(() => {
+		bulkRunning = wbActive;
+	});
+
+	async function loadWb() {
+		if (wbTimer) {
+			clearTimeout(wbTimer);
+			wbTimer = null;
+		}
+		try {
+			const res = await apiRequest(`${apiBase}/writer-batches/active`);
+			if (!res.ok) return;
+			const data = await res.json().catch(() => null);
+			const next = (data?.batch ?? null) as WbInfo | null;
+			const progressed = next !== null && next.done + next.failed !== wbSeen;
+			wbSeen = next ? next.done + next.failed : 0;
+			wb = next;
+			// Tiap artikel selesai mengubah daftar dan tagihan: segarkan datanya.
+			if (progressed) void load();
+			if (next && (next.status === 'queued' || next.status === 'running')) {
+				wbTimer = setTimeout(() => void loadWb(), 4000 + Math.random() * 3000);
+			}
+		} catch {
+			/* polling hanya penerang: kegagalan sesaat tidak mengganggu halaman */
+		}
+	}
+
+	function wbItemOf(item: PlacementItem): WbItem | undefined {
+		return wb?.items.find((i) => i.media_id === item.media_id && i.slot === (item.slot ?? 1));
+	}
+
+	// Panel pembuat antrean (Generate Semua / cover / artikel turunan).
+	type WbPanel = { kind: WbKind; source: PlacementItem | null; keys: string[] };
+	let wbPanel = $state<WbPanel | null>(null);
+	let wbTopic = $state('');
+	let wbGaya = $state<'sederhana' | 'proper'>('sederhana');
+	let wbBriefId = $state('');
+	let wbBriefs = $state<Array<{ id: string; name: string }>>([]);
+	let wbChecked = $state<Record<string, boolean>>({});
+	let wbBusy = $state(false);
+	let wbPanelError = $state('');
+	let wbAck = $state(false);
+
+	const wbPanelTargets = $derived(wbPanel ? selected.filter((m) => wbPanel!.keys.includes(pkey(m))) : []);
+	const wbChosen = $derived(wbPanelTargets.filter((m) => wbChecked[pkey(m)]));
+	const wbUnit = $derived(
+		wbPanel?.kind === 'derived' ? derivativeCostCredits : wbPanel?.kind === 'cover' ? imageCreditCost : writerCostCredits
+	);
+	/** Artikel sumber tulisan sendiri: peringatan konten berulang ditampilkan dulu. */
+	const wbSourceManual = $derived(wbPanel?.kind === 'derived' && wbPanel.source?.article_source !== 'ai');
+
+	async function loadWbBriefs() {
+		try {
+			const res = await apiRequest(`/v1/brands/${brandId}/profiler/profiles`);
+			if (res.ok) {
+				const data = await res.json().catch(() => null);
+				wbBriefs = (data?.profiles ?? []).map((p: { id: string; name?: string }) => ({ id: String(p.id), name: String(p.name ?? 'Brief') }));
+			}
+			const ar = await apiRequest(`/v1/brands/${brandId}/profiler/active-brief`);
+			if (ar.ok) {
+				const a = await ar.json().catch(() => null);
+				if (a?.profile_id && wbBriefs.some((b) => b.id === a.profile_id)) wbBriefId = String(a.profile_id);
+			}
+			if (!wbBriefId && wbBriefs.length > 0) wbBriefId = wbBriefs[0].id;
+		} catch {
+			/* daftar brief opsional: gaya sederhana tetap bisa dipakai */
+		}
+	}
+
+	function wbTargetItems(kind: WbKind, source: PlacementItem | null): PlacementItem[] {
+		if (kind === 'cover') {
+			return selected.filter((m) => !itemLocked(m) && hasDoc(m) && articleStats[pkey(m)] && !articleStats[pkey(m)].cover);
+		}
+		return selected.filter((m) => !itemLocked(m) && !hasDoc(m) && !(source && pkey(m) === pkey(source)));
+	}
+
+	async function openWb(kind: WbKind, source: PlacementItem | null = null) {
+		if (viewOnly) {
+			error = tr(VIEW_ONLY_MSG);
+			return;
+		}
+		if (wbActive) {
+			error = tr('Masih ada antrean penulisan yang berjalan. Tunggu sampai selesai.');
+			return;
+		}
+		let base = wbTargetItems(kind, source);
+		// Untuk artikel dan cover, centang yang ada menjadi pembatas. Artikel turunan
+		// memilih targetnya di panel.
+		if (kind !== 'derived' && pickedList.length > 0) base = base.filter((m) => pickedIds[pkey(m)]);
+		if (base.length === 0) {
+			error =
+				kind === 'cover'
+					? tr('Semua artikel yang dipilih sudah punya cover.')
+					: tr('Tidak ada artikel kosong yang bisa dibuat.');
+			return;
+		}
+		wbChecked = Object.fromEntries(base.map((m) => [pkey(m), true]));
+		wbPanelError = '';
+		wbAck = false;
+		wbTopic = '';
+		wbGaya = 'sederhana';
+		wbPanel = { kind, source, keys: base.map((m) => pkey(m)) };
+		if (kind === 'article') void loadWbBriefs();
+	}
+
+	async function startWb() {
+		if (!wbPanel || wbBusy) return;
+		const kind = wbPanel.kind;
+		if (wbChosen.length === 0) {
+			wbPanelError = tr('Pilih minimal satu artikel.');
+			return;
+		}
+		if (kind === 'article' && wbGaya === 'proper' && !wbBriefId) {
+			wbPanelError = tr('Pilih brief untuk gaya Yang Proper.');
+			return;
+		}
+		if (kind === 'derived' && wbSourceManual && !wbAck) {
+			wbPanelError = tr('Centang pernyataan di atas untuk melanjutkan.');
+			return;
+		}
+		wbBusy = true;
+		wbPanelError = '';
+		try {
+			const res = await apiRequest(`${apiBase}/writer-batches`, {
+				method: 'POST',
+				body: JSON.stringify({
+					kind,
+					items: wbChosen.map((m) => ({ media_id: m.media_id, slot: m.slot ?? 1 })),
+					topic: wbTopic.trim(),
+					gaya: wbGaya,
+					brief_id: wbBriefId,
+					source_media_id: wbPanel.source?.media_id ?? '',
+					source_slot: wbPanel.source?.slot ?? 1
+				})
+			});
+			if (!res.ok) throw new Error(await readApiError(res, tr('Gagal memulai antrean.')));
+			wbPanel = null;
+			pickedIds = {};
+			await loadWb();
+			void load();
+		} catch (reason) {
+			wbPanelError = reason instanceof Error ? reason.message : tr('Gagal memulai antrean.');
+		} finally {
+			wbBusy = false;
+		}
+	}
+
+	// Aksi massal: hapus artikel terpilih (yang terkunci dilewati).
+	let bulkDeleteOpen = $state(false);
+	let bulkDeleteBusy = $state(false);
+	let bulkDeleteError = $state('');
+	const bulkDeleteTargets = $derived(selected.filter((m) => pickedIds[pkey(m)] && !itemLocked(m)));
+	async function bulkDeletePicked() {
+		if (bulkDeleteBusy || bulkDeleteTargets.length === 0) return;
+		bulkDeleteBusy = true;
+		bulkDeleteError = '';
+		try {
+			for (const m of bulkDeleteTargets) {
+				const res = await apiRequest(`${apiBase}/placement/${m.media_id}/article/${m.slot ?? 1}`, { method: 'DELETE' });
+				if (!res.ok) throw new Error(await readApiError(res, tr('Gagal menghapus artikel.')));
+			}
+			bulkDeleteOpen = false;
+			pickedIds = {};
+		} catch (reason) {
+			bulkDeleteError = reason instanceof Error ? reason.message : tr('Gagal menghapus artikel.');
+		} finally {
+			bulkDeleteBusy = false;
+			await load();
+			await loadArticleInfo();
+		}
+	}
+
+	// Ringkasan kekurangan di bilah bawah: klik satu kelompok untuk menggulir ke
+	// baris pertamanya dan menyorotnya sebentar.
+	let focusKey = $state('');
+	let focusTimer: ReturnType<typeof setTimeout> | null = null;
+	function focusReadinessGroup(g: { items: { mediaId: string; slot: number }[] }) {
+		const first = g.items[0];
+		if (!first) return;
+		const key = pkey({ media_id: first.mediaId, slot: first.slot });
+		document.getElementById(`row-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		focusKey = key;
+		if (focusTimer) clearTimeout(focusTimer);
+		focusTimer = setTimeout(() => (focusKey = ''), 2200);
+	}
 
 	function askDeleteArticle(media: PlacementItem, item: PlacementItem) {
 		if (itemLocked(item) || bulkRunning) return;
@@ -540,7 +767,6 @@
 	//    bar aksi muncul di bawah header; "Generate Semua" masih placeholder
 	//    popup "Dalam Pengerjaan" — mesin bulk menyusul.
 	let pickedIds = $state<Record<string, boolean>>({});
-	let bulkPopupOpen = $state(false);
 	const pickedList = $derived(
 		Object.keys(pickedIds).filter((id) => pickedIds[id] && selected.some((m) => pkey(m) === id))
 	);
@@ -621,6 +847,10 @@
 	}
 
 	async function load() {
+		if (!wbBooted) {
+			wbBooted = true;
+			void loadWb();
+		}
 		try {
 			const [placeRes, linksRes, draftRes, auditsRes] = await Promise.all([
 				apiRequest(`${apiBase}/placement`),
@@ -647,6 +877,12 @@
 				if (Number.isFinite(wr) && wr >= 0) writerRegenCount = wr;
 				const icCount = Number(d.image_charge_count ?? 0);
 				if (Number.isFinite(icCount) && icCount >= 0) imageChargeCount = icCount;
+				const dcost = Number(d.writer_derivative_cost_credits ?? 1500);
+				if (Number.isFinite(dcost) && dcost > 0) derivativeCostCredits = dcost;
+				const dcount = Number(d.derived_charge_count ?? 0);
+				if (Number.isFinite(dcount) && dcount >= 0) derivedChargeCount = dcount;
+				const dtc = Number(d.derived_charged_tc ?? 0);
+				if (Number.isFinite(dtc) && dtc >= 0) derivedChargedTC = dtc;
 			}
 			// null = belum diketahui / gagal dibaca → tombol kembali ke jalur aman
 			// (mampir ke halaman Gatekeeper).
@@ -1499,7 +1735,9 @@
 			media,
 			images,
 			imageCount: imageChargeCount,
-			total: writing + media + images
+			derived: derivedChargedTC,
+			derivedCount: derivedChargeCount,
+			total: writing + media + images + derivedChargedTC
 		};
 	});
 	const pendingCount = $derived(selected.filter((m) => !hasDoc(m) || canRegen(m)).length);
@@ -2112,12 +2350,23 @@
 						<button
 							class="app-btn app-btn-primary !min-h-8 !px-3 !text-xs disabled:opacity-50 disabled:cursor-not-allowed"
 							type="button"
-							disabled={pickedList.length < 2}
-							title={pickedList.length < 2 ? tr('Pilih minimal 2 media untuk Generate Semua.') : tr('Generate artikel untuk semua media terpilih')}
-							onclick={() => (bulkPopupOpen = true)}
+							disabled={wbActive || viewOnly}
+							title={pickedList.length > 0 ? tr('Generate artikel untuk media yang dicentang') : tr('Generate artikel untuk semua media yang belum punya artikel')}
+							onclick={() => void openWb('article')}
 						>
 							<Sparkles size={13} /> {tr('Generate Semua')}
 						</button>
+						{#if wbTargetItems('cover', null).length > 0}
+							<button
+								class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+								type="button"
+								disabled={wbActive || viewOnly}
+								title={tr('Buat cover AI untuk semua artikel yang belum punya cover')}
+								onclick={() => void openWb('cover')}
+							>
+								<Image size={13} /> {tr('Buat semua cover')}
+							</button>
+						{/if}
 						{#if campaignName}
 							<span class="inline-flex max-w-[260px] cursor-help items-center gap-1.5 truncate rounded-[5px] border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs max-sm:max-w-full" title={`${tr('Ini adalah nama kampanye Anda')}: ${campaignName}`}>
 								<FileText size={13} class="shrink-0 text-slate-400" />
@@ -2137,7 +2386,32 @@
 						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" onclick={pickAll}>
 							{allPicked ? tr('Batal Pilih Semua') : tr('Pilih Semua')}
 						</button>
+						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={wbActive || viewOnly} onclick={() => void openWb('article')}>
+							<Sparkles size={13} /> {tr('Generate terpilih')}
+						</button>
+						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" type="button" disabled={wbActive || viewOnly} onclick={() => void openWb('cover')}>
+							<Image size={13} /> {tr('Buat cover terpilih')}
+						</button>
+						<button class="app-btn app-btn-soft !min-h-8 !px-3 !text-xs" style="color: var(--destructive);" type="button" disabled={wbActive || viewOnly || bulkDeleteTargets.length === 0} onclick={() => { bulkDeleteError = ''; bulkDeleteOpen = true; }}>
+							<Trash2 size={13} /> {tr('Hapus terpilih')}
+						</button>
 					</div>
+				</div>
+			{/if}
+
+			{#if wbVisible && wb}
+				<div
+					class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[5px] border px-3.5 py-2.5 text-xs shadow-2xs {wbActive ? 'border-blue-200/80 bg-blue-50/80 text-blue-800' : wb.failed > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}"
+					role="status"
+				>
+					{#if wbActive}<LoaderCircle size={14} class="shrink-0 animate-spin" />{:else if wb.failed > 0}<TriangleAlert size={14} class="shrink-0" />{:else}<CircleCheck size={14} class="shrink-0" />{/if}
+					<span class="font-semibold">{wbActive ? tr(WB_TITLE[wb.kind]) : tr('Antrean selesai')}</span>
+					<span class="tabular-nums">{wb.done + wb.failed} {tr('dari')} {wb.total} {tr('selesai')}{wb.failed > 0 ? ` · ${wb.failed} ${tr('belum berhasil')}` : ''}</span>
+					{#if wbActive}
+						<span class="text-[11px] opacity-80">{tr('Boleh ditinggal. Kami kabari lewat notifikasi saat selesai.')}</span>
+					{:else}
+						<button class="app-btn app-btn-soft ml-auto !min-h-7 !px-2.5 !text-[11px]" type="button" onclick={() => (wbDismissed = wb!.id)}>{tr('Tutup')}</button>
+					{/if}
 				</div>
 			{/if}
 
@@ -2310,7 +2584,8 @@
 									{@const links2 = linkStats[pkey(item)] ?? null}
 									{@const stats = articleStats[pkey(item)] ?? null}
 									{@const doc = hasDoc(item)}
-									<div class="flex flex-col gap-3 border-t border-slate-100 px-3.5 py-3 first:border-t-0 sm:px-4 lg:flex-row lg:items-center max-sm:gap-3.5 max-sm:px-4 max-sm:py-4">
+									{@const wbi = wbItemOf(item)}
+									<div id={`row-${pkey(item)}`} class="flex flex-col gap-3 border-t border-slate-100 px-3.5 py-3 transition-colors first:border-t-0 sm:px-4 lg:flex-row lg:items-center max-sm:gap-3.5 max-sm:px-4 max-sm:py-4 {focusKey === pkey(item) ? 'bg-amber-50' : ''}">
 										<!-- Kiri: centang + thumbnail cover artikel + info -->
 										<div class="flex min-w-0 flex-1 items-start gap-3">
 											<input
@@ -2337,6 +2612,12 @@
 											</div>
 											<div class="min-w-0 flex-1">
 												<div class="flex flex-wrap items-center gap-1.5 max-sm:gap-2">
+													{#if wbi && wbi.status !== 'done'}
+														<span class="inline-flex items-center gap-1 rounded-[5px] border px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] {wbi.status === 'failed' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-blue-200/80 bg-blue-50 text-blue-700'}" title={wbi.error_message ?? ''}>
+															{#if wbi.status === 'running'}<LoaderCircle size={11} class="animate-spin" />{:else if wbi.status === 'queued'}<Clock size={11} />{:else}<CircleAlert size={11} />{/if}
+															<span>{wbi.status === 'running' ? tr(WB_TITLE[wb?.kind ?? 'article']) : wbi.status === 'queued' ? tr('Antre') : (wbi.error_message ?? tr('Belum berhasil'))}</span>
+														</span>
+													{/if}
 													{#if qcRunning[pkey(item)]}
 														<span class="inline-flex items-center gap-1 rounded-[5px] border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold max-sm:text-[10.5px] text-blue-700">
 															<LoaderCircle size={11} class="animate-spin" />
@@ -2417,6 +2698,12 @@
 														0 {tr('kata')}
 													{/if}
 													<span class="mx-1 text-slate-300">·</span>{tr('Artikel')} {item.slot ?? 1}
+													{#if item.derived_from_media_id}
+														<span class="mx-1 text-slate-300">·</span><span class="text-[10.5px] font-semibold text-slate-500">{tr('Dari artikel')} {item.derived_from_name ?? tr('media lain')}</span>
+														{#if Number(item.derived_similarity ?? 0) > 0.35}
+															<span class="ml-1 rounded-[5px] border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700" title={tr('Isinya masih mirip dengan artikel asal. Sebaiknya edit sebelum terbit.')}>{tr('Mirip artikel asal')}</span>
+														{/if}
+													{/if}
 													{#if hasMultipleRounds}
 														<span class="mx-1 text-slate-300">·</span><span class="inline-flex items-center gap-1 rounded-[5px] bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{tr('Putaran')} {item.round ?? 1}</span>
 													{/if}
@@ -2464,6 +2751,16 @@
 													>
 														<Pencil size={15} strokeWidth={2} class="shrink-0" />
 														<span class="expTip">{itemLocked(item) ? tr('Lihat Artikel') : tr('Edit Artikel')}</span>
+													</button>
+													<button
+														type="button"
+														class="expAction inline-flex h-9 min-w-9 items-center justify-center rounded-[5px] max-sm:h-10 max-sm:min-w-10 border border-slate-200 bg-white text-slate-700 text-xs font-semibold transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+														aria-label={tr('Pakai untuk media lain')}
+														disabled={wbActive || viewOnly}
+														onclick={() => void openWb('derived', item)}
+												>
+														<Images size={15} strokeWidth={2} class="shrink-0" />
+														<span class="expTip">{tr('Pakai untuk media lain')}</span>
 													</button>
 													<button
 														type="button"
@@ -2918,6 +3215,16 @@
 					<span class="font-medium">{toRp(cost.images)}</span>
 				</div>
 
+				{#if cost.derivedCount > 0}
+					<div class="costPopoverRow">
+						<span>
+							{tr('Artikel untuk media lain')} <span class="text-muted-foreground">({cost.derivedCount} {tr('artikel')})</span>
+							<span class="costPopoverRowNote">{cost.derivedCount} × {toRp(derivativeCostCredits)}</span>
+						</span>
+						<span class="font-medium">{toRp(cost.derived)}</span>
+					</div>
+				{/if}
+
 				<div class="costPopoverDivider"></div>
 
 				<div class="costPopoverTotal">
@@ -2929,9 +3236,16 @@
 		{/if}
 	</div>
 
-	<!-- Kolom Tengah: Pesan Status QC -->
-	<div class="hidden md:flex ml-auto items-center gap-2 max-w-sm text-xs leading-snug">
-		{#if distributable}
+	<!-- Kolom Tengah: ringkasan kekurangan (klik satu untuk menggulir ke barisnya) -->
+	<div class="hidden md:flex ml-auto items-center gap-2 max-w-md text-xs leading-snug">
+		{#if readinessGroups.length > 0}
+			<TriangleAlert size={16} class="text-amber-600 shrink-0" />
+			<span class="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 font-medium text-amber-800">
+				{#each readinessGroups as g (g.key)}
+					<button type="button" class="underline-offset-2 hover:underline" onclick={() => focusReadinessGroup(g)}>{g.label} ({g.items.length})</button>
+				{/each}
+			</span>
+		{:else if distributable}
 			<CircleCheck size={16} class="text-emerald-600 shrink-0" />
 			<span class="text-slate-600 font-medium">{tr('QC sudah lulus')}</span>
 		{:else if distributable === false}
@@ -3277,16 +3591,107 @@
 	{/if}
 
 	<!-- Popup placeholder untuk "Generate Semua" (bulk): mesinnya menyusul. -->
-	{#if bulkPopupOpen}
-		<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(0,0,0,.45);" role="presentation" onclick={() => (bulkPopupOpen = false)} onkeydown={(e) => { if (e.key === 'Escape') bulkPopupOpen = false; }}>
-			<dialog open class="app-card w-full max-w-sm p-6 text-center" aria-label={tr('Generate Semua')} onclick={(e) => e.stopPropagation()}>
-				<div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border" style="background: var(--warning-soft, #fdf3e3); border-color: color-mix(in srgb, var(--warning, #d97706) 35%, transparent); color: var(--warning, #b45309);">
-					<Wrench size={24} strokeWidth={2} />
+	{#if wbPanel}
+		<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.55);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && !wbBusy) wbPanel = null; }}>
+			<div class="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-[5px] border bg-white shadow-2xl" style="border-color: var(--border);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr(WB_TITLE[wbPanel.kind])} onkeydown={(e) => { if (e.key === 'Escape' && !wbBusy) wbPanel = null; }}>
+				<div class="flex items-start justify-between gap-3 border-b px-5 py-4" style="border-color: var(--border);">
+					<div>
+						<h3 class="text-sm font-bold">
+							{wbPanel.kind === 'article' ? tr('Generate artikel') : wbPanel.kind === 'cover' ? tr('Buat cover') : tr('Pakai untuk media lain')}
+						</h3>
+						<p class="mt-0.5 text-xs text-muted-foreground">
+							{#if wbPanel.kind === 'derived' && wbPanel.source}
+								{tr('Tulis ulang artikel dari')} <strong>{wbPanel.source.name}</strong> {tr('untuk media di bawah, dengan topik dan fakta yang sama tetapi kalimat dan susunan berbeda.')}
+							{:else if wbPanel.kind === 'cover'}
+								{tr('Cover dibuat dari judul tiap artikel.')}
+							{:else}
+								{tr('Satu artikel untuk tiap media yang dipilih. Dikerjakan di server, jadi halaman boleh ditinggal.')}
+							{/if}
+						</p>
+					</div>
+					<button class="rounded-[5px] p-1.5 text-muted-foreground hover:bg-secondary disabled:opacity-40" type="button" aria-label={tr('Tutup')} disabled={wbBusy} onclick={() => (wbPanel = null)}><X size={16} /></button>
 				</div>
-				<h3 class="mt-3 text-base font-bold">{tr('Generate Semua')}</h3>
-				<p class="mt-1.5 text-sm text-muted-foreground">{tr('Fitur generate artikel di semua media terpilih masih dalam pengerjaan.')}</p>
-				<button class="app-btn app-btn-soft mt-4 !min-h-9 !px-4" type="button" onclick={() => (bulkPopupOpen = false)}>{tr('Tutup')}</button>
-			</dialog>
+
+				<div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+					{#if wbPanel.kind === 'article'}
+						<label class="block text-xs font-semibold">
+							{tr('Topik atau konteks (opsional)')}
+							<textarea class="app-input mt-1 w-full text-xs" rows="3" maxlength="4000" bind:value={wbTopic} placeholder={tr('Kosongkan untuk memakai topik dari brief.')}></textarea>
+						</label>
+						<fieldset class="text-xs">
+							<legend class="font-semibold">{tr('Gaya')}</legend>
+							<label class="mt-1.5 flex items-center gap-2"><input type="radio" bind:group={wbGaya} value="sederhana" /> {tr('Sederhana Aja')}</label>
+							<label class="mt-1 flex items-center gap-2"><input type="radio" bind:group={wbGaya} value="proper" /> {tr('Yang Proper (memakai brief)')}</label>
+						</fieldset>
+						{#if wbGaya === 'proper'}
+							<label class="block text-xs font-semibold">
+								{tr('Brief')}
+								<select class="app-input mt-1 w-full text-xs" bind:value={wbBriefId}>
+									{#if wbBriefs.length === 0}<option value="">{tr('Belum ada brief')}</option>{/if}
+									{#each wbBriefs as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
+								</select>
+							</label>
+						{/if}
+					{/if}
+
+					{#if wbPanel.kind === 'derived' && wbSourceManual}
+						<div class="rounded-[5px] border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+							<p class="font-semibold">{tr('Artikel sumber ini Anda tulis sendiri.')}</p>
+							<p class="mt-1">{tr('Konten yang dipakai berulang di beberapa media bisa ditolak oleh mitra. Sebaiknya tulis ulang sendiri untuk tiap media.')}</p>
+							<label class="mt-2 flex items-start gap-2"><input type="checkbox" class="mt-0.5" bind:checked={wbAck} /> <span>{tr('Saya paham, tetap buatkan versi lain.')}</span></label>
+						</div>
+					{/if}
+
+					<div>
+						<p class="text-xs font-semibold">{tr('Artikel yang diproses')} ({wbChosen.length}/{wbPanelTargets.length})</p>
+						<div class="mt-1.5 max-h-44 space-y-1 overflow-y-auto rounded-[5px] border p-2" style="border-color: var(--border);">
+							{#each wbPanelTargets as t (pkey(t))}
+								<label class="flex items-center gap-2 text-xs">
+									<input type="checkbox" checked={!!wbChecked[pkey(t)]} onchange={() => (wbChecked = { ...wbChecked, [pkey(t)]: !wbChecked[pkey(t)] })} />
+									<span class="truncate">{t.name} <span class="text-muted-foreground">· {tr('Artikel')} {t.slot ?? 1}</span></span>
+								</label>
+							{/each}
+						</div>
+					</div>
+
+					<div class="rounded-[5px] bg-slate-50 p-3 text-xs">
+						<div class="flex items-center justify-between">
+							<span>{wbChosen.length} {tr('artikel')} × {toRp(wbUnit)}</span>
+							<span class="text-sm font-bold tabular-nums">{toRp(wbChosen.length * wbUnit)}</span>
+						</div>
+						<p class="mt-1 text-[11px] text-muted-foreground">{tr('Kredit dipotong per artikel setelah berhasil dibuat. Artikel yang gagal tidak ditagih.')}</p>
+					</div>
+
+					{#if wbPanelError}
+						<p class="flex items-center gap-1.5 text-xs" style="color: var(--destructive);"><CircleAlert size={14} /> {wbPanelError}</p>
+					{/if}
+				</div>
+
+				<div class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
+					<button class="app-btn app-btn-soft text-xs" type="button" disabled={wbBusy} onclick={() => (wbPanel = null)}>{tr('Batal')}</button>
+					<button class="app-btn app-btn-primary text-xs font-semibold" type="button" disabled={wbBusy || wbChosen.length === 0} onclick={() => void startWb()}>
+						{#if wbBusy}<LoaderCircle size={13} class="animate-spin" /> {tr('Memulai…')}{:else}<Sparkles size={13} /> {tr('Jalankan')}{/if}
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	{#if bulkDeleteOpen}
+		<div class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background-color: rgba(15, 23, 42, 0.55);" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && !bulkDeleteBusy) bulkDeleteOpen = false; }}>
+			<div class="w-full max-w-md overflow-hidden rounded-[5px] border bg-white shadow-2xl" style="border-color: var(--border);" role="dialog" aria-modal="true" tabindex="-1" aria-label={tr('Hapus artikel terpilih')} onkeydown={(e) => { if (e.key === 'Escape' && !bulkDeleteBusy) bulkDeleteOpen = false; }}>
+				<div class="space-y-3 p-5">
+					<p class="flex items-center gap-2 text-sm font-bold" style="color: var(--destructive);"><Trash2 size={18} /> {tr('Hapus')} {bulkDeleteTargets.length} {tr('artikel terpilih?')}</p>
+					<p class="text-xs leading-relaxed text-muted-foreground">{tr('Naskah yang sudah ada ikut terhapus dan tidak bisa dikembalikan. Artikel yang sudah terbit atau terjadwal dilewati.')}</p>
+					{#if bulkDeleteError}<p class="flex items-center gap-1.5 text-xs" style="color: var(--destructive);"><CircleAlert size={14} /> {bulkDeleteError}</p>{/if}
+				</div>
+				<div class="flex items-center justify-end gap-2.5 border-t px-5 py-3.5" style="border-color: var(--border); background-color: var(--muted, #f8fafc);">
+					<button class="app-btn app-btn-soft text-xs" type="button" disabled={bulkDeleteBusy} onclick={() => (bulkDeleteOpen = false)}>{tr('Batal')}</button>
+					<button class="app-btn text-xs font-semibold" style="background-color: var(--destructive); color: #fff;" type="button" disabled={bulkDeleteBusy} onclick={() => void bulkDeletePicked()}>
+						{#if bulkDeleteBusy}<LoaderCircle size={13} class="animate-spin" /> {tr('Menghapus…')}{:else}<Trash2 size={13} /> {tr('Ya, Hapus')}{/if}
+					</button>
+				</div>
+			</div>
 		</div>
 	{/if}
 

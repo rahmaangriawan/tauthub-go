@@ -70,6 +70,14 @@ type tautWriterOptions struct {
 	// LLM menulis lebih banyak isi — untuk streaming SSE ke editor. Nilai masih
 	// mentah (belum lewat finalizeTautArticleHTML); finalize hanya di akhir.
 	StreamHTML func(partial string)
+	// Derived (opsional): artikel turunan dari artikel media lain. Teksnya jadi
+	// rujukan fakta, dan hasilnya dicek kemiripannya dengan artikel asal.
+	Derived *tautDerivedSource
+	// ChargeRefPrefix/ChargeCredits/ChargeReason (opsional): ganti tagihan
+	// penulisan baku. Dipakai artikel turunan (tarif lebih murah, ledger sendiri).
+	ChargeRefPrefix string
+	ChargeCredits   int
+	ChargeReason    string
 }
 
 // normalizeTautWriterLinks: validasi + rapikan tautan dari klien. Maksimal 10
@@ -365,6 +373,9 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	gaya := ""
 	customLinks := []tautWriterLink{}
 	var streamFn func(string)
+	var derived *tautDerivedSource
+	chargeRefPrefix, chargeReason := "taut-writer:", ""
+	chargeCredits := 0
 	if len(opts) > 0 {
 		clientTopic = strings.TrimSpace(opts[0].Topic)
 		articleType = strings.TrimSpace(opts[0].ArticleType)
@@ -373,6 +384,12 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		gaya = strings.TrimSpace(opts[0].Gaya)
 		customLinks = opts[0].Links
 		streamFn = opts[0].StreamHTML
+		derived = opts[0].Derived
+		if opts[0].ChargeRefPrefix != "" {
+			chargeRefPrefix = opts[0].ChargeRefPrefix
+		}
+		chargeCredits = opts[0].ChargeCredits
+		chargeReason = opts[0].ChargeReason
 	}
 	campaign, err := d.loadTautCampaignRow(ctx, campaignID, brandID)
 	if err != nil {
@@ -898,6 +915,7 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		customLinkBlock,
 		spokespersonBlock,
 		smartVariationRule,
+		derivedPromptBlock(derived),
 		"Bahan (rujukan fakta yang boleh dipakai; QC AI Overview memverifikasi klaim ke bahan yang sama):\n"+referenceMaterial,
 		"Aturan hyperlink media (bila media tidak mengizinkan, gunakan ATURAN PENANAMAN LINK nol): "+jsonStringify(orEmptySliceValue(hyperlink)),
 		"Kutipan/fakta hanya dari bahan/brief di atas — jangan mengarang angka, tanggal, atau harga. Soal narasumber: pakai [SPOKESPERSON] bila tersedia; bila brief tidak memuatnya dan [PROMPT ANGLE (dari Admin)] di atas mewajibkan kutipan bernama, penuhi mandat angle itu dengan satu figur strategis yang wajar.",
@@ -985,6 +1003,28 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 	}
 	if strings.TrimSpace(contentHTML) == "" {
 		return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "generating", DocumentID: nil}, nil
+	}
+	// Artikel turunan: cocokkan dengan artikel asal. Terlalu mirip -> tulis ulang
+	// SEKALI dengan instruksi yang lebih keras, dan pakai hasil yang lebih berbeda.
+	derivedSim := 0.0
+	if derived != nil {
+		derivedSim = shingleSimilarity(stripHTMLToText(contentHTML), derived.Text)
+		if derivedSim > derivedSimilarityMax {
+			if retry, rerr := d.runTautAgent(ctx, writerAgent, campaignID, prompt+"\n"+derivedRetryInstruction(), &mediaID, true); rerr == nil {
+				if p2, ok := contentengine.ParseWriterPayload(retry.Content); ok && strings.TrimSpace(p2.ContentHTML) != "" {
+					if sim2 := shingleSimilarity(stripHTMLToText(p2.ContentHTML), derived.Text); sim2 < derivedSim {
+						contentHTML = truncateString(p2.ContentHTML, 200000)
+						if t := truncateString(p2.Title, 300); t != "" {
+							title = t
+						}
+						if m := truncateString(strings.TrimSpace(p2.MetaDescription), 500); m != "" {
+							metaDescription = m
+						}
+						derivedSim = sim2
+					}
+				}
+			}
+		}
 	}
 	// Kepastian panjang untuk permintaan klien: prompt saja tidak cukup, draf di
 	// luar jendela ditulis ulang SEKALI di sini (sebelum pasca-proses link dsb).
@@ -1120,9 +1160,25 @@ func (d *Deps) generateTautWriterArticle(ctx context.Context, campaignID, brandI
 		return writerItemResult{}, err
 	}
 	if !isRegen {
-		if err := d.chargeCredit(ctx, brandID, "taut-writer:"+campaignID+":"+mediaID,
-			d.writerCreditCost(ctx), "Taut Pintar — penulisan AI artikel "+name, userID); err != nil {
+		credits := chargeCredits
+		if credits <= 0 {
+			credits = d.writerCreditCost(ctx)
+		}
+		reason := chargeReason
+		if reason == "" {
+			reason = "Taut Pintar — penulisan AI artikel " + name
+		}
+		if err := d.chargeCredit(ctx, brandID, chargeRefPrefix+campaignID+":"+mediaID, credits, reason, userID); err != nil {
 			return writerItemResult{}, err
+		}
+	}
+	if derived != nil {
+		// Asal, skor, dan teks rujukan dipakai baris artikel dan Gatekeeper.
+		if err := d.exec(ctx,
+			`UPDATE taut_campaign_media SET derived_from_media_id = $1, derived_from_slot = $2,
+			   derived_similarity = $3, derived_source_text = $4 WHERE id = $5`,
+			derived.MediaID, derived.Slot, derivedSim, truncateString(derived.Text, derivedSourceTextCap), itemID); err != nil {
+			slog.Warn("[taut-writer] gagal menyimpan asal artikel turunan", "media_id", mediaID, "err", truncateString(err.Error(), 200))
 		}
 	}
 	return writerItemResult{MediaID: mediaID, MediaType: mediaType, Status: "draft", DocumentID: docID, Title: title,
